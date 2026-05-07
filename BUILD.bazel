@@ -83,10 +83,3 @@ platform(
         "@platforms//cpu:arm64",
     ],
 )
-
-
-# Sample Hello World
-cc_binary(
-    name = "hello",
-    srcs = ["hello.c"],
-)
