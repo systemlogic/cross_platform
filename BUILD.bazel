@@ -30,7 +30,7 @@ cc_toolchain(
 # --- ARM64 Toolchain ---
 cc_toolchain_config(
     name = "arm64_config",
-    cpu = "aarch64",
+    cpu = "arm64",
     gcc_path = "external/gcc_9_arm64/bin/aarch64-none-linux-gnu-gcc",
     ld_path = "external/gcc_9_arm64/bin/aarch64-none-linux-gnu-ld",
     ar_path = "external/gcc_9_arm64/bin/aarch64-none-linux-gnu-ar",
@@ -62,7 +62,7 @@ toolchain(
 toolchain(
     name = "gcc_arm64_toolchain",
     exec_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
-    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:aarch64"],
+    target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:arm64"],
     toolchain = ":cc_arm64",
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
@@ -80,7 +80,7 @@ platform(
     name = "arm64_platform",
     constraint_values = [
         "@platforms//os:linux",
-        "@platforms//cpu:aarch64",
+        "@platforms//cpu:arm64",
     ],
 )
 

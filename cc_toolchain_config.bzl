@@ -15,26 +15,34 @@ def _impl(ctx):
     ]
 
 
-    arm = ctx.attr.cpu == "aarch64"
+    arm = ctx.attr.cpu in ["aarch64", "arm64"]
     base_path = ctx.attr.sysroot_path
     sysroot_path = base_path + ("/aarch64-none-linux-gnu/libc"  if arm else "/x86_64-buildroot-linux-gnu/sysroot") 
     print(sysroot_path)
-    feature_flags = [
-	"--sysroot=" + sysroot_path,
-        "-Wl,--sysroot=" + sysroot_path,
-	# 3. Add explicit library search paths to help it find libc.so.6 and crt*.o
-	"-L" + sysroot_path + "/usr/lib64",
-	"-L" + sysroot_path + "/lib64",
-	"-L" + sysroot_path + "/usr/lib",
-	"-L" + sysroot_path + "/lib",
-	# 4. FIX THE DYNAMIC LINKER (This was pointing to host /lib64 in your params)
-	"-Wl,-dynamic-linker=/lib/ld-linux-aarch64.so.1" if arm else "-Wl,-dynamic-linker=/lib64/ld-linux-x86-64.so.2",
-	# 5. Prevent host path leakage
-	"-no-canonical-prefixes",
-    ]
-    print(feature_flags)
+    sysroot_flags = ["--sysroot=" + sysroot_path]
+    print(sysroot_flags)
 
     features = [
+        feature(
+            name = "default_compile_flags",
+            enabled = True,
+            flag_sets = [
+                flag_set(
+                    actions = [
+                        ACTION_NAMES.c_compile,
+                        ACTION_NAMES.cpp_compile,
+                        ACTION_NAMES.cpp_header_parsing,
+                        ACTION_NAMES.cpp_module_compile,
+                        ACTION_NAMES.cpp_module_codegen,
+                        ACTION_NAMES.clif_match,
+                        ACTION_NAMES.lto_backend,
+                        ACTION_NAMES.preprocess_assemble,
+                        ACTION_NAMES.linkstamp_compile,
+                    ],
+                    flag_groups = [flag_group(flags = sysroot_flags)],
+                ),
+            ],
+        ),
         feature(
             name = "default_linker_flags",
             enabled = True,
@@ -44,11 +52,7 @@ def _impl(ctx):
 		    	ACTION_NAMES.cpp_link_executable, 
 		    	ACTION_NAMES.cpp_link_dynamic_library,
 		    ],
-                    flag_groups = [
-                        flag_group(
-                            flags = feature_flags
-                        ),
-                    ],
+                    flag_groups = [flag_group(flags = sysroot_flags)],
                 ),
             ],
         ),

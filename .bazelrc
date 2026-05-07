@@ -1,7 +1,10 @@
 # Register toolchains
-build --extra_toolchains=//:gcc_x86_64_toolchain
-build --extra_toolchains=//:gcc_arm64_toolchain
+build --incompatible_enable_cc_toolchain_resolution
 
 # Define platform shortcuts
 build:arm64 --platforms=//:arm64_platform
+build:arm64 --cpu=arm64
+build:arm64 --extra_toolchains=//:gcc_arm64_toolchain
+# x86_64 uses the external x86 toolchain explicitly.
 build:x86_64 --platforms=//:x86_64_platform
+build:x86_64 --extra_toolchains=//:gcc_x86_64_toolchain
