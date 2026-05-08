@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Project-local Bazel wrapper.
+# Reads the required version from .bazelversion, downloads that exact Bazel
+# binary on first use (cached in ~/.cache/bazel-versions/), and exec's it.
+# Usage: ./bazel <bazel-args...>  — identical to running 'bazel' directly.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BAZELVERSION_FILE="${SCRIPT_DIR}/.bazelversion"
+
+# ── Read version ────────────────────────────────────────────────────────────
+if [[ ! -f "${BAZELVERSION_FILE}" ]]; then
+  echo "ERROR: .bazelversion not found at ${BAZELVERSION_FILE}" >&2
+  exit 1
+fi
+
+VERSION="$(tr -d '[:space:]' < "${BAZELVERSION_FILE}")"
+if [[ -z "${VERSION}" ]]; then
+  echo "ERROR: .bazelversion is empty" >&2
+  exit 1
+fi
+
+# ── Detect platform ──────────────────────────────────────────────────────────
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "${OS}" in
+  Darwin) OS_LABEL="darwin" ;;
+  Linux)  OS_LABEL="linux"  ;;
+  *)      echo "ERROR: Unsupported OS: ${OS}" >&2; exit 1 ;;
+esac
+
+case "${ARCH}" in
+  arm64|aarch64) ARCH_LABEL="arm64"  ;;
+  x86_64)        ARCH_LABEL="x86_64" ;;
+  *)             echo "ERROR: Unsupported arch: ${ARCH}" >&2; exit 1 ;;
+esac
+
+# ── Resolve cache path ───────────────────────────────────────────────────────
+CACHE_DIR="${HOME}/.cache/bazel-versions"
+BAZEL_BIN="${CACHE_DIR}/bazel-${VERSION}-${OS_LABEL}-${ARCH_LABEL}"
+DOWNLOAD_URL="https://github.com/bazelbuild/bazel/releases/download/${VERSION}/bazel-${VERSION}-${OS_LABEL}-${ARCH_LABEL}"
+
+# ── Download if not cached ───────────────────────────────────────────────────
+if [[ ! -x "${BAZEL_BIN}" ]]; then
+  echo "[bazel] Downloading Bazel ${VERSION} (${OS_LABEL}/${ARCH_LABEL})..." >&2
+  mkdir -p "${CACHE_DIR}"
+  TMP="$(mktemp "${CACHE_DIR}/.download-XXXXXX")"
+  trap 'rm -f "${TMP}"' EXIT
+
+  if command -v curl &>/dev/null; then
+    curl -fSL --progress-bar -o "${TMP}" "${DOWNLOAD_URL}"
+  elif command -v wget &>/dev/null; then
+    wget -q --show-progress -O "${TMP}" "${DOWNLOAD_URL}"
+  else
+    echo "ERROR: curl or wget is required to download Bazel" >&2
+    exit 1
+  fi
+
+  chmod +x "${TMP}"
+  mv "${TMP}" "${BAZEL_BIN}"
+  echo "[bazel] Cached → ${BAZEL_BIN}" >&2
+fi
+
+# ── Run ──────────────────────────────────────────────────────────────────────
+exec "${BAZEL_BIN}" "$@"
