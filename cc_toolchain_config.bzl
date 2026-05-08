@@ -1,5 +1,6 @@
 load("@bazel_tools//tools/cpp:cc_toolchain_config_lib.bzl", "feature", "flag_group", "flag_set", "tool_path")
 load("@bazel_tools//tools/build_defs/cc:action_names.bzl", "ACTION_NAMES")
+load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 
 
 def _impl(ctx):
@@ -14,13 +15,13 @@ def _impl(ctx):
         tool_path(name = "strip", path = "/bin/false"),
     ]
 
-
-    arm = ctx.attr.cpu in ["aarch64", "arm64"]
     base_path = ctx.attr.sysroot_path
-    sysroot_path = base_path + ("/aarch64-none-linux-gnu/libc"  if arm else "/x86_64-buildroot-linux-gnu/sysroot") 
-    print(sysroot_path)
+    sysroot_subdir = ctx.attr.sysroot_subdir
+    if not sysroot_subdir:
+        arm = ctx.attr.cpu in ["aarch64", "arm64"]
+        sysroot_subdir = "aarch64-none-linux-gnu/libc" if arm else "x86_64-buildroot-linux-gnu/sysroot"
+    sysroot_path = base_path + "/" + sysroot_subdir
     sysroot_flags = ["--sysroot=" + sysroot_path]
-    print(sysroot_flags)
 
     features = [
         feature(
@@ -49,19 +50,18 @@ def _impl(ctx):
             flag_sets = [
                 flag_set(
                     actions = [
-		    	ACTION_NAMES.cpp_link_executable, 
-		    	ACTION_NAMES.cpp_link_dynamic_library,
-		    ],
+                        ACTION_NAMES.cpp_link_executable,
+                        ACTION_NAMES.cpp_link_dynamic_library,
+                    ],
                     flag_groups = [flag_group(flags = sysroot_flags)],
                 ),
             ],
         ),
-    ] 
-
+    ]
 
     return cc_common.create_cc_toolchain_config_info(
         ctx = ctx,
-	features = features,
+        features = features,
         toolchain_identifier = ctx.attr.cpu,
         host_system_name = "local",
         target_system_name = "local",
@@ -71,11 +71,11 @@ def _impl(ctx):
         abi_version = "unknown",
         abi_libc_version = "unknown",
         tool_paths = tool_paths,
-	builtin_sysroot = sysroot_path,
-	cxx_builtin_include_directories = [
-		"/",
-            	base_path + "/lib/gcc",
-    	],
+        builtin_sysroot = sysroot_path,
+        cxx_builtin_include_directories = [
+            "/",
+            base_path + "/lib/gcc",
+        ],
     )
 
 cc_toolchain_config = rule(
@@ -86,7 +86,9 @@ cc_toolchain_config = rule(
         "ld_path": attr.string(),
         "ar_path": attr.string(),
         "cpp_path": attr.string(),
-	"sysroot_path": attr.string(),
+        "sysroot_path": attr.string(),
+        # Optional override for the sysroot subdirectory under sysroot_path.
+        # Defaults to arch-derived path when empty.
+        "sysroot_subdir": attr.string(default = ""),
     },
-    provides = [CcToolchainConfigInfo],
 )
