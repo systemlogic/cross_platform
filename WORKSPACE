@@ -1,6 +1,5 @@
-workspace(name = "croos_tools")
+workspace(name = "cross_platform")
 
-load("//external_tool:external_tool_repositories.bzl", "external_tool_workspace")
+# All external repositories and toolchain registrations are managed in
+# MODULE.bazel via the toolchain_ext module extension (Bzlmod / Bazel 9+).
 
-# Inclusion point: external_tool owns the repository setup.
-external_tool_workspace()

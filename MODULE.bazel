@@ -1,6 +1,40 @@
-###############################################################################
-# Bazel now uses Bzlmod by default to manage external dependencies.
-# Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
-#
-# For more details, please check https://github.com/bazelbuild/bazel/issues/18958
-###############################################################################
+module(
+    name = "cross_platform",
+    version = "0.0.1",
+)
+
+bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "platforms", version = "1.0.0")
+
+# All external toolchain repos (GCC, LLVM, macOS SDK) are managed here
+# so Bzlmod can see them via use_repo.
+toolchain_ext = use_extension("//:toolchain_extension.bzl", "toolchain_ext")
+use_repo(
+    toolchain_ext,
+    "gcc_9_x86_64",
+    "gcc_9_arm64",
+    "gcc_aarch64_native",
+    "llvm_macos_arm64",
+    "llvm_macos_x86_64",
+    "llvm_linux_x86_64",
+    "llvm_linux_aarch64",
+    "macos_sdk",
+)
+
+# macOS toolchains registered globally; Bazel auto-selects based on exec+target constraints.
+# Linux toolchains are pinned per-build via --extra_toolchains in .bazelrc so they don't
+# interfere with exec-platform resolution on non-Linux hosts.
+register_toolchains(
+    # macOS arm64 exec
+    "//:clang_macos_arm64_toolchain",
+    "//:clang_macos_x86_64_toolchain",
+    # macOS x86_64 exec
+    "//:clang_macos_x86_64_on_macos_x86_64_toolchain",
+    "//:clang_macos_arm64_on_macos_x86_64_toolchain",
+    # Linux x86_64 exec → macOS targets
+    "//:clang_macos_arm64_on_linux_x86_64_toolchain",
+    "//:clang_macos_x86_64_on_linux_x86_64_toolchain",
+    # Linux aarch64 exec → macOS targets
+    "//:clang_macos_arm64_on_linux_aarch64_toolchain",
+    "//:clang_macos_x86_64_on_linux_aarch64_toolchain",
+)
