@@ -190,7 +190,7 @@
   "moduleExtensions": {
     "//:toolchain_extension.bzl%toolchain_ext": {
       "general": {
-        "bzlTransitiveDigest": "FCOVMVybHZgh/j2NZvwnvLsbmnIFoLUuF2v+rCJLHpk=",
+        "bzlTransitiveDigest": "gZPiWMG7ui3/ttJgesXTvkGzFSu3TO/hEnql6/ZcFrs=",
         "usagesDigest": "Bk4vGo2l5xAhnr6O986BijcF6PfzP/LxjF0MMkpCxY4=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
@@ -203,7 +203,7 @@
               "strip_prefix": "x86-64--glibc--stable-2024.02-1",
               "build_file": "@@//external_tool:BUILD.gcc_9_x86_64.bazel",
               "patch_cmds": [
-                "SYSROOT=x86_64-buildroot-linux-gnu/sysroot; LIBC_SO=$SYSROOT/usr/lib64/libc.so; if [ -f \"$LIBC_SO\" ]; then sed -i 's# /lib64/# =/lib64/#g' \"$LIBC_SO\"; sed -i 's# /usr/lib64/# =/usr/lib64/#g' \"$LIBC_SO\"; fi"
+                "SYSROOT=x86_64-buildroot-linux-gnu/sysroot; for SO in \"$SYSROOT/usr/lib64/libc.so\" \"$SYSROOT/usr/lib/libc.so\" \"$SYSROOT/usr/lib/libm.so\" \"$SYSROOT/usr/lib64/libm.so\"; do if [ -f \"$SO\" ] && head -1 \"$SO\" | grep -q 'GNU ld script'; then sed -i 's# /lib64/# =/lib64/#g' \"$SO\"; sed -i 's# /usr/lib64/# =/usr/lib64/#g' \"$SO\"; sed -i 's# /lib/# =/lib/#g' \"$SO\"; sed -i 's# /usr/lib/# =/usr/lib/#g' \"$SO\"; fi; done"
               ]
             }
           },

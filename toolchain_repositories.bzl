@@ -45,11 +45,14 @@ def gcc_9_x86_64_repository(name):
         build_file = "//external_tool:BUILD.gcc_9_x86_64.bazel",
         patch_cmds = [
             "SYSROOT=x86_64-buildroot-linux-gnu/sysroot; " +
-            "LIBC_SO=$SYSROOT/usr/lib64/libc.so; " +
-            "if [ -f \"$LIBC_SO\" ]; then " +
-            "sed -i 's# /lib64/# =/lib64/#g' \"$LIBC_SO\"; " +
-            "sed -i 's# /usr/lib64/# =/usr/lib64/#g' \"$LIBC_SO\"; " +
-            "fi",
+            "for SO in \"$SYSROOT/usr/lib64/libc.so\" \"$SYSROOT/usr/lib/libc.so\" \"$SYSROOT/usr/lib/libm.so\" \"$SYSROOT/usr/lib64/libm.so\"; do " +
+            "if [ -f \"$SO\" ] && head -1 \"$SO\" | grep -q 'GNU ld script'; then " +
+            "sed -i 's# /lib64/# =/lib64/#g' \"$SO\"; " +
+            "sed -i 's# /usr/lib64/# =/usr/lib64/#g' \"$SO\"; " +
+            "sed -i 's# /lib/# =/lib/#g' \"$SO\"; " +
+            "sed -i 's# /usr/lib/# =/usr/lib/#g' \"$SO\"; " +
+            "fi; " +
+            "done",
         ],
     )
 

@@ -20,7 +20,7 @@ def _impl(ctx):
     # -isysroot is the canonical macOS flag; Clang passes it through to ld as -syslibroot.
     # -fuse-ld=lld makes Clang use ld64.lld from its own bin/ instead of the host ld.
     compile_flags = ["-target", target_triple]
-    link_flags    = ["-target", target_triple, "-fuse-ld=lld"]
+    link_flags    = ["-target", target_triple, "-fuse-ld=lld", "-lc++"]
     if sdk_path:
         compile_flags = compile_flags + ["-isysroot", sdk_path]
         link_flags    = link_flags    + ["-isysroot", sdk_path]

@@ -18,7 +18,7 @@ def _impl(ctx):
     sysroot_path  = ctx.attr.sysroot_path
 
     compile_flags = ["-target", target_triple]
-    link_flags    = ["-target", target_triple, "-fuse-ld=lld"]
+    link_flags    = ["-target", target_triple, "-fuse-ld=lld", "-lstdc++", "-lm"]
     if sysroot_path:
         compile_flags = compile_flags + ["--sysroot=" + sysroot_path]
         link_flags    = link_flags    + ["--sysroot=" + sysroot_path]

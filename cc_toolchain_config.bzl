@@ -53,7 +53,7 @@ def _impl(ctx):
                         ACTION_NAMES.cpp_link_executable,
                         ACTION_NAMES.cpp_link_dynamic_library,
                     ],
-                    flag_groups = [flag_group(flags = sysroot_flags)],
+                    flag_groups = [flag_group(flags = sysroot_flags + ["-lstdc++", "-lm"])],
                 ),
             ],
         ),
