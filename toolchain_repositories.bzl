@@ -17,6 +17,7 @@ def _toolchain_archive_impl(repository_ctx):
     print(repository_ctx.attr.urls)
     repository_ctx.download_and_extract(
         url = repository_ctx.attr.urls[0],
+        sha256 = repository_ctx.attr.sha256,
         stripPrefix = repository_ctx.attr.strip_prefix,
     )
 
@@ -34,8 +35,53 @@ toolchain_archive_repository = repository_rule(
         "strip_prefix": attr.string(mandatory = True),
         "build_file": attr.label(mandatory = True, allow_single_file = True),
         "patch_cmds": attr.string_list(default = []),
+        "sha256": attr.string(default = ""),
     },
 )
+
+# =============================================================================
+# Temurin JDK 21.0.11+10 — four platform archives
+#
+# macOS: strip_prefix includes Contents/Home so the JDK root lands at repo root.
+# Linux: top-level directory stripped, JDK root lands at repo root.
+# After extraction, bin/java is always at ./bin/java for all four repos.
+# =============================================================================
+
+def jdk_temurin_21_macos_arm64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.11%2B10/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.11_10.tar.gz"],
+        sha256 = "6ebcf221c9b41507b14c098e93c6ead6440b8d9bd154f8ec666c4c73abbdb201",
+        strip_prefix = "jdk-21.0.11+10/Contents/Home",
+        build_file = "//external_tool:BUILD.jdk.bazel",
+    )
+
+def jdk_temurin_21_macos_x86_64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.11%2B10/OpenJDK21U-jdk_x64_mac_hotspot_21.0.11_10.tar.gz"],
+        sha256 = "34180eb03e6d207c388cce3da668f6cc7cd7508c185c24782fadac2c9c0e66f9",
+        strip_prefix = "jdk-21.0.11+10/Contents/Home",
+        build_file = "//external_tool:BUILD.jdk.bazel",
+    )
+
+def jdk_temurin_21_linux_x86_64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.11%2B10/OpenJDK21U-jdk_x64_linux_hotspot_21.0.11_10.tar.gz"],
+        sha256 = "4b2220e232a97997b436ca6ab15cbf70171ecff52958a46159dfa5a8c44ca4de",
+        strip_prefix = "jdk-21.0.11+10",
+        build_file = "//external_tool:BUILD.jdk.bazel",
+    )
+
+def jdk_temurin_21_linux_aarch64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.11%2B10/OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.11_10.tar.gz"],
+        sha256 = "8d498ec88e1c1989fab95c6784240ab92d011e29c54d20a3f9c324b13476f9ad",
+        strip_prefix = "jdk-21.0.11+10",
+        build_file = "//external_tool:BUILD.jdk.bazel",
+    )
 
 def gcc_9_x86_64_repository(name):
     toolchain_archive_repository(
@@ -126,19 +172,78 @@ def llvm_linux_x86_64_repository(name):
 # via -target; requires MACOS_SDK_PATH to be set for system headers.
 # Also used to cross-compile to Linux x86_64 via -target x86_64-linux-gnu with
 # the Bootlin x86_64 sysroot (gcc_9_x86_64 repo).
+#
+# ld.lld in this package is dynamically linked against libxml2.so.2.  Its ELF
+# RPATH ($ORIGIN/../lib) causes the OS loader to look in lib/ relative to the
+# binary, so we bundle libxml2 there during repository setup.  If libxml2 is not
+# installed on the host we download the Ubuntu 22.04 arm64 .deb as a hermetic
+# fallback (Bazel caches the download in the output base).
+
+def _llvm_linux_aarch64_impl(repository_ctx):
+    repository_ctx.download_and_extract(
+        url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/clang+llvm-18.1.8-aarch64-linux-gnu.tar.xz",
+        stripPrefix = "clang+llvm-18.1.8-aarch64-linux-gnu",
+    )
+
+    # Search the host's library cache, then common paths.
+    find_result = repository_ctx.execute([
+        "bash",
+        "-c",
+        "{ ldconfig -p 2>/dev/null | grep 'libxml2\\.so\\.2 ' | awk '{print $NF}' | head -1; " +
+        "find /usr/lib /lib /usr/local/lib -maxdepth 5 -name 'libxml2.so.*' -not -name '*.a' " +
+        "  2>/dev/null | sort -V | tail -1; } | grep -v '^$' | head -1",
+    ])
+    libxml = find_result.stdout.strip()
+
+    if libxml:
+        cp = repository_ctx.execute(["cp", libxml, "lib/libxml2.so.2"])
+        if cp.return_code != 0:
+            fail("Failed to copy libxml2 from host: " + cp.stderr)
+    else:
+        # libxml2 not found on host — download from Ubuntu 22.04 arm64 package mirror.
+        repository_ctx.download(
+            url = "http://ports.ubuntu.com/ubuntu-ports/pool/main/libx/libxml2/libxml2_2.9.13+dfsg-1ubuntu0.6_arm64.deb",
+            output = "_libxml2.deb",
+        )
+        extract = repository_ctx.execute([
+            "bash",
+            "-c",
+            "set -e; " +
+            "mkdir -p _libxml2_tmp && cd _libxml2_tmp; " +
+            "ar x ../_libxml2.deb; " +
+            "if [ -f data.tar.xz ]; then tar xJf data.tar.xz; " +
+            "elif [ -f data.tar.zst ]; then " +
+            "  if command -v zstd >/dev/null 2>&1; then " +
+            "    zstd -d data.tar.zst -o data.tar && tar xf data.tar && rm -f data.tar; " +
+            "  else tar --zstd -xf data.tar.zst; fi; " +
+            "elif [ -f data.tar.gz ]; then tar xzf data.tar.gz; fi; " +
+            "SO=$(find . -name 'libxml2.so.*' -not -name '*.a' 2>/dev/null | sort -V | tail -1); " +
+            "cp \"$SO\" ../lib/libxml2.so.2; " +
+            "cd ..; rm -rf _libxml2.deb _libxml2_tmp",
+        ])
+        if extract.return_code != 0:
+            fail(
+                "Could not bundle libxml2.so.2 for ld.lld.\n" +
+                "Quick fix: sudo apt-get install -y libxml2\n" +
+                extract.stderr,
+            )
+
+    repository_ctx.symlink(
+        repository_ctx.path(repository_ctx.attr.build_file),
+        "BUILD.bazel",
+    )
+
+_llvm_linux_aarch64_rule = repository_rule(
+    implementation = _llvm_linux_aarch64_impl,
+    attrs = {
+        "build_file": attr.label(mandatory = True, allow_single_file = True),
+    },
+)
+
 def llvm_linux_aarch64_repository(name):
-    toolchain_archive_repository(
+    _llvm_linux_aarch64_rule(
         name = name,
-        urls = ["https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/clang+llvm-18.1.8-aarch64-linux-gnu.tar.xz"],
-        strip_prefix = "clang+llvm-18.1.8-aarch64-linux-gnu",
         build_file = "//external_tool:BUILD.llvm_linux.bazel",
-        patch_cmds = [
-            # ld.lld links against libxml2.so.2, but Ubuntu 24.04+ ships libxml2.so.16.
-            # Copy whatever libxml2 the host has into lib/ so ld.lld finds it via
-            # its $ORIGIN/../lib RUNPATH without needing any system-path changes.
-            "LIBXML=$(find /usr/lib -maxdepth 4 -name 'libxml2.so.*' -not -name '*.a' 2>/dev/null | sort -V | tail -1); " +
-            "[ -n \"$LIBXML\" ] && cp \"$LIBXML\" lib/libxml2.so.2 || true",
-        ],
     )
 
 # LLVM 17.0.6 for macOS x86_64 — runs on an Intel Mac exec machine.

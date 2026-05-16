@@ -81,7 +81,7 @@ def _impl(ctx):
         abi_version = "unknown",
         abi_libc_version = "unknown",
         tool_paths = tool_paths,
-        builtin_sysroot = sysroot_path if sysroot_path else "",
+        builtin_sysroot = "",
         cxx_builtin_include_directories = builtin_includes,
     )
 
