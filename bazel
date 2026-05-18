@@ -63,5 +63,12 @@ if [[ ! -x "${BAZEL_BIN}" ]]; then
   echo "[bazel] Cached → ${BAZEL_BIN}" >&2
 fi
 
+# ── Ensure host packages ─────────────────────────────────────────────────────
+SETUP_SCRIPT="${SCRIPT_DIR}/setup.sh"
+if [[ -x "${SETUP_SCRIPT}" ]]; then
+  "${SETUP_SCRIPT}"
+fi
+
+
 # ── Run ──────────────────────────────────────────────────────────────────────
 exec "${BAZEL_BIN}" "$@"
