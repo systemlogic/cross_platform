@@ -5,6 +5,10 @@ load(
     "gcc_9_arm64_repository",
     "gcc_9_x86_64_repository",
     "gcc_aarch64_native_repository",
+    "jdk_temurin_21_linux_aarch64_repository",
+    "jdk_temurin_21_linux_x86_64_repository",
+    "jdk_temurin_21_macos_arm64_repository",
+    "jdk_temurin_21_macos_x86_64_repository",
     "llvm_linux_aarch64_repository",
     "llvm_linux_x86_64_repository",
     "llvm_macos_arm64_repository",
@@ -39,6 +43,14 @@ def _toolchain_ext_impl(module_ctx):
     # macOS SDK path detected via xcrun (macOS) or MACOS_SDK_PATH env var (Linux).
     # Degrades gracefully when neither is set.
     macos_sdk_repository(name = "macos_sdk")
+
+    # Temurin JDK 21.0.11+10 — one repo per exec platform.
+    # strip_prefix already accounts for the macOS Contents/Home bundle layout,
+    # so bin/java is at the repository root for all four repos.
+    jdk_temurin_21_macos_arm64_repository(name = "jdk_macos_arm64")
+    jdk_temurin_21_macos_x86_64_repository(name = "jdk_macos_x86_64")
+    jdk_temurin_21_linux_x86_64_repository(name = "jdk_linux_x86_64")
+    jdk_temurin_21_linux_aarch64_repository(name = "jdk_linux_aarch64")
 
 toolchain_ext = module_extension(
     implementation = _toolchain_ext_impl,

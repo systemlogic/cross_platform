@@ -1,6 +1,20 @@
 # Register toolchains
 build --incompatible_enable_cc_toolchain_resolution
 
+# Python: use the Bazel-downloaded interpreter (CPython 3.12) for all py_* targets.
+# "script" bootstrap generates a shell-script launcher that calls the toolchain
+# Python binary directly, eliminating the #!/usr/bin/env python3 shebang that
+# requires a system python3 to be installed on the exec machine.
+build --@rules_python//python/config_settings:bootstrap_impl=script
+
+# Java: use downloaded Temurin JDK 21 (no host JDK dependency).
+# Explicitly selecting version 21 ensures Bazel resolves our registered
+# jdk_*_toolchain entries rather than falling back to local_jdk detection.
+build --java_language_version=21
+build --java_runtime_version=21
+build --tool_java_language_version=21
+build --tool_java_runtime_version=21
+
 # Linux arm64 target.
 # On x86_64 exec: selects gcc_arm64_toolchain (ARM cross-compiler).
 # On aarch64 exec: selects gcc_arm64_native_toolchain (LLVM aarch64 + Bootlin aarch64 sysroot).
@@ -37,3 +51,9 @@ build:stats --compilation_mode=dbg
 build:stats --copt=-pg
 build:stats --copt=-DSTATS_ENABLED
 build:stats --linkopt=-pg
+
+# Run below command on local to setup remote cache on local machine
+# docker run -u 1000:1000 -p 9092:9092 \
+#   -v /Volumes/Storage/cache:/data buchgr/bazel-remote-cache \
+#   --max_size 5000 --grpc_address 0.0.0.0:9092
+# build --remote_cache=grpc://192.168.1.15:9092
