@@ -1,0 +1,16 @@
+load(":toolchain.bzl", "py_runtime_toolchain")
+
+# The toolchain type that py_self_executable resolves against.
+toolchain_type(
+    name = "toolchain_type",
+    visibility = ["//visibility:public"],
+)
+
+# Expose action helpers so rule implicit attrs can reference them.
+exports_files(
+    [
+        "bundle_builder.py",
+        "bootstrap.sh.tpl",
+    ],
+    visibility = ["//visibility:public"],
+)

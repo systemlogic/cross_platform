@@ -1,0 +1,28 @@
+load("//python:defs.bzl", "py_self_executable")
+
+# Build with:
+#   ./bazel build //examples/python:demo
+#
+# Run with:
+#   ./bazel-bin/examples/python/demo
+#
+# On first execution the bundle is extracted to ~/.cache/py_exe/<hash>/.
+# Subsequent runs start instantly from the cached extraction.
+#
+# To add pip packages:
+#   1. Add python_ext.pip() entries in MODULE.bazel.
+#   2. Add use_repo() for each new name.
+#   3. Add "@pip_<name>//:pkg" to the deps list below.
+
+py_self_executable(
+    name = "demo",
+    main = "main.py",
+    srcs = ["main.py"],
+    deps = [
+        "@pip_requests//:pkg",
+        "@pip_urllib3//:pkg",
+        "@pip_certifi//:pkg",
+        "@pip_charset_normalizer//:pkg",
+        "@pip_idna//:pkg",
+    ],
+)
