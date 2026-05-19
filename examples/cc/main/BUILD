@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 cc_library(
     name = "hello-greet",
@@ -13,4 +13,10 @@ cc_binary(
         ":hello-greet",
         "//examples/cc/lib:hello-time",
     ],
+)
+
+cc_test(
+    name = "hello_greet_test",
+    srcs = ["hello_greet_test.cc"],
+    deps = [":hello-greet"],
 )

@@ -1,0 +1,11 @@
+load("@rules_java//java:defs.bzl", "java_runtime")
+
+# JDK root is at the repository root (strip_prefix removes the version + Contents/Home on macOS,
+# or just the version dir on Linux). After extraction, bin/java is always at ./bin/java.
+java_runtime(
+    name = "jdk",
+    srcs = glob(["**/*"], allow_empty = True),
+    java_home = ".",
+    version = 21,
+    visibility = ["//visibility:public"],
+)
