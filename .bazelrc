@@ -57,3 +57,8 @@ build:stats --linkopt=-pg
 #   -v /Volumes/Storage/cache:/data buchgr/bazel-remote-cache \
 #   --max_size 5000 --grpc_address 0.0.0.0:9092
 # build --remote_cache=grpc://192.168.1.15:9092
+
+# build --repository_cache=~/.cache/bazel/repository_cache
+# common --experimental_repository_cache_hardlinks=true
+# fetch --loading_phase_threads=HOST_CPUS
+# common --experimental_scale_timeouts=2.0
