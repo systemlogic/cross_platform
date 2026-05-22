@@ -1,0 +1,17 @@
+# Injected into downloaded protoc repos (protoc-29.x-<os>-<arch>.zip).
+# Archive layout:
+#   bin/protoc
+#   include/google/protobuf/*.proto
+#   include/google/protobuf/compiler/plugin.proto
+
+filegroup(
+    name = "protoc",
+    srcs = ["bin/protoc"],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "well_known_protos",
+    srcs = glob(["include/**/*.proto"]),
+    visibility = ["//visibility:public"],
+)

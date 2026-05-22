@@ -1,0 +1,9 @@
+load("@rules_python//python:defs.bzl", "py_binary")
+
+py_binary(
+    name = "grpcio_tools_protoc",
+    srcs = ["grpcio_tools_protoc_main.py"],
+    main = "grpcio_tools_protoc_main.py",
+    deps = ["@pip//grpcio_tools"],
+    visibility = ["//visibility:public"],
+)

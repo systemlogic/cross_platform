@@ -3,6 +3,7 @@ load(":cc_toolchain_config.bzl", "cc_toolchain_config")
 load(":linux_llvm_toolchain_config.bzl", "cc_linux_llvm_toolchain_config")
 load(":macos_toolchain_config.bzl", "cc_macos_toolchain_config")
 load("@macos_sdk//:sdk_path.bzl", "MACOS_SDK_PATH")
+load("//proto:proto_toolchain.bzl", "proto_toolchain")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -533,4 +534,80 @@ platform(
         "@platforms//os:macos",
         "@platforms//cpu:x86_64",
     ],
+)
+
+# =============================================================================
+# Proto toolchains — protoc 29.3 + gRPC plugins, one per exec platform.
+#
+# exec_compatible_with: the machine where protoc runs (always the exec platform).
+# No target_compatible_with: generated source files are language-level, not
+# architecture-specific, so any target platform can use them.
+# =============================================================================
+
+proto_toolchain(
+    name = "proto_toolchain_macos_arm64_impl",
+    protoc = "@protoc_macos_arm64//:protoc",
+    protoc_include_path = "external/+toolchain_ext+protoc_macos_arm64/include",
+    protoc_includes = ["@protoc_macos_arm64//:well_known_protos"],
+    grpc_go_plugin = "@protoc_gen_go_macos_arm64//:plugin",
+    grpc_go_grpc_plugin = "@protoc_gen_go_grpc_macos_arm64//:plugin",
+    grpc_java_plugin = "@protoc_gen_grpc_java_macos_arm64//:plugin",
+)
+
+toolchain(
+    name = "proto_toolchain_macos_arm64",
+    exec_compatible_with = ["@platforms//os:macos", "@platforms//cpu:arm64"],
+    toolchain = ":proto_toolchain_macos_arm64_impl",
+    toolchain_type = "//proto:toolchain_type",
+)
+
+proto_toolchain(
+    name = "proto_toolchain_macos_x86_64_impl",
+    protoc = "@protoc_macos_x86_64//:protoc",
+    protoc_include_path = "external/+toolchain_ext+protoc_macos_x86_64/include",
+    protoc_includes = ["@protoc_macos_x86_64//:well_known_protos"],
+    grpc_go_plugin = "@protoc_gen_go_macos_x86_64//:plugin",
+    grpc_go_grpc_plugin = "@protoc_gen_go_grpc_macos_x86_64//:plugin",
+    grpc_java_plugin = "@protoc_gen_grpc_java_macos_x86_64//:plugin",
+)
+
+toolchain(
+    name = "proto_toolchain_macos_x86_64",
+    exec_compatible_with = ["@platforms//os:macos", "@platforms//cpu:x86_64"],
+    toolchain = ":proto_toolchain_macos_x86_64_impl",
+    toolchain_type = "//proto:toolchain_type",
+)
+
+proto_toolchain(
+    name = "proto_toolchain_linux_x86_64_impl",
+    protoc = "@protoc_linux_x86_64//:protoc",
+    protoc_include_path = "external/+toolchain_ext+protoc_linux_x86_64/include",
+    protoc_includes = ["@protoc_linux_x86_64//:well_known_protos"],
+    grpc_go_plugin = "@protoc_gen_go_linux_x86_64//:plugin",
+    grpc_go_grpc_plugin = "@protoc_gen_go_grpc_linux_x86_64//:plugin",
+    grpc_java_plugin = "@protoc_gen_grpc_java_linux_x86_64//:plugin",
+)
+
+toolchain(
+    name = "proto_toolchain_linux_x86_64",
+    exec_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+    toolchain = ":proto_toolchain_linux_x86_64_impl",
+    toolchain_type = "//proto:toolchain_type",
+)
+
+proto_toolchain(
+    name = "proto_toolchain_linux_aarch64_impl",
+    protoc = "@protoc_linux_aarch64//:protoc",
+    protoc_include_path = "external/+toolchain_ext+protoc_linux_aarch64/include",
+    protoc_includes = ["@protoc_linux_aarch64//:well_known_protos"],
+    grpc_go_plugin = "@protoc_gen_go_linux_aarch64//:plugin",
+    grpc_go_grpc_plugin = "@protoc_gen_go_grpc_linux_aarch64//:plugin",
+    grpc_java_plugin = "@protoc_gen_grpc_java_linux_aarch64//:plugin",
+)
+
+toolchain(
+    name = "proto_toolchain_linux_aarch64",
+    exec_compatible_with = ["@platforms//os:linux", "@platforms//cpu:aarch64"],
+    toolchain = ":proto_toolchain_linux_aarch64_impl",
+    toolchain_type = "//proto:toolchain_type",
 )

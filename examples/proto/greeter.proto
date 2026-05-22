@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package greeter;
+
+option go_package = "cross_platform/examples/proto/greeter";
+option java_package = "com.example.greeter";
+option java_multiple_files = true;
+option java_outer_classname = "GreeterProto";
+
+// Request message sent by the client.
+message HelloRequest {
+  string name = 1;
+}
+
+// Response message sent by the server.
+message HelloReply {
+  string message = 1;
+}
+
+// The greeting service.
+service Greeter {
+  // Sends a greeting and receives a reply.
+  rpc SayHello(HelloRequest) returns (HelloReply);
+
+  // Sends multiple greetings (server-side streaming).
+  rpc SayHelloStream(HelloRequest) returns (stream HelloReply);
+}

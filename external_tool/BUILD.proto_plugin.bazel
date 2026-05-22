@@ -1,0 +1,9 @@
+# Injected into single-binary plugin repos (protoc-gen-go, protoc-gen-go-grpc,
+# protoc-gen-grpc-java).  The archive/download lands a single executable at
+# the repo root; expose it as :plugin.
+
+filegroup(
+    name = "plugin",
+    srcs = glob(["protoc-gen-*"]),
+    visibility = ["//visibility:public"],
+)
