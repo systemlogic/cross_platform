@@ -140,6 +140,20 @@ use_repo(
     "protoc_gen_grpc_java_linux_x86_64",
     "protoc_gen_grpc_java_macos_arm64",
     "protoc_gen_grpc_java_macos_x86_64",
+    # Maven JARs for Java gRPC runtime (downloaded via Bazel's http downloader)
+    "maven_error_prone_annotations",
+    "maven_failureaccess",
+    "maven_grpc_api",
+    "maven_grpc_context",
+    "maven_grpc_core",
+    "maven_grpc_netty_shaded",
+    "maven_grpc_protobuf",
+    "maven_grpc_protobuf_lite",
+    "maven_grpc_stub",
+    "maven_guava",
+    "maven_javax_annotation",
+    "maven_perfmark_api",
+    "maven_protobuf_java",
 )
 
 # macOS toolchains registered globally; Bazel auto-selects based on exec+target constraints.

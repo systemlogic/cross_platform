@@ -505,3 +505,129 @@ def grpc_python_plugin_macos_x86_64_repository(name):
         sha256 = "",
         build_file = "//external_tool:BUILD.proto_plugin.bazel",
     )
+
+# =============================================================================
+# maven_jar_repository — downloads a single Maven JAR from a URL.
+#
+# Exposes the JAR as a java_import :jar target (BUILD.maven_jar.bazel).
+# Uses Bazel's built-in http downloader — no host JVM or Maven tooling needed.
+# Used for the gRPC Java runtime: grpc-java 1.68.0, protobuf-java 3.25.5, guava.
+# =============================================================================
+
+def _maven_jar_impl(repository_ctx):
+    repository_ctx.download(
+        url = repository_ctx.attr.url,
+        output = "lib.jar",
+        sha256 = repository_ctx.attr.sha256,
+    )
+    repository_ctx.symlink(
+        repository_ctx.path(repository_ctx.attr.build_file),
+        "BUILD.bazel",
+    )
+
+_maven_jar_repository = repository_rule(
+    implementation = _maven_jar_impl,
+    attrs = {
+        "url": attr.string(mandatory = True),
+        "sha256": attr.string(default = ""),
+        "build_file": attr.label(mandatory = True, allow_single_file = True),
+    },
+)
+
+def grpc_java_maven_repositories():
+    """Downloads all Maven JARs required by the Java gRPC example."""
+
+    # Core gRPC interfaces: Channel, Server, Metadata, CallOptions, Status …
+    _maven_jar_repository(
+        name = "maven_grpc_api",
+        url = "https://repo1.maven.org/maven2/io/grpc/grpc-api/1.68.0/grpc-api-1.68.0.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )
+
+    # io.grpc.Context — separated from grpc-api in 1.x; referenced by grpc-api public API
+    _maven_jar_repository(
+        name = "maven_grpc_context",
+        url = "https://repo1.maven.org/maven2/io/grpc/grpc-context/1.68.0/grpc-context-1.68.0.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )
+
+    # AbstractStub, ClientCalls, ServerCalls, StreamObserver — needed by generated stubs
+    _maven_jar_repository(
+        name = "maven_grpc_stub",
+        url = "https://repo1.maven.org/maven2/io/grpc/grpc-stub/1.68.0/grpc-stub-1.68.0.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )
+
+    # ProtoUtils.marshaller() — wires protobuf messages into gRPC method descriptors
+    _maven_jar_repository(
+        name = "maven_grpc_protobuf",
+        url = "https://repo1.maven.org/maven2/io/grpc/grpc-protobuf/1.68.0/grpc-protobuf-1.68.0.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )
+
+    # ProtoLiteUtils — runtime dep of grpc-protobuf (ProtoUtils.marshaller delegates to it)
+    _maven_jar_repository(
+        name = "maven_grpc_protobuf_lite",
+        url = "https://repo1.maven.org/maven2/io/grpc/grpc-protobuf-lite/1.68.0/grpc-protobuf-lite-1.68.0.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )
+
+    # grpc-core: io.grpc.internal.* classes used at runtime by grpc-netty-shaded.
+    # Not bundled inside grpc-netty-shaded.jar; must be on the classpath separately.
+    _maven_jar_repository(
+        name = "maven_grpc_core",
+        url = "https://repo1.maven.org/maven2/io/grpc/grpc-core/1.68.0/grpc-core-1.68.0.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )
+
+    # Netty transport (shaded): NettyServerBuilder, NettyChannelBuilder.
+    # Bundles shaded Netty; requires grpc-core and grpc-api on the classpath.
+    _maven_jar_repository(
+        name = "maven_grpc_netty_shaded",
+        url = "https://repo1.maven.org/maven2/io/grpc/grpc-netty-shaded/1.68.0/grpc-netty-shaded-1.68.0.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )
+
+    # Protobuf runtime — must match the protoc version (29.3 → Java 4.29.3).
+    # protoc 26+ generates code that calls RuntimeVersion.validateProtobufGencodeVersion()
+    # and uses API changes that only exist in protobuf-java 4.x.
+    _maven_jar_repository(
+        name = "maven_protobuf_java",
+        url = "https://repo1.maven.org/maven2/com/google/protobuf/protobuf-java/4.29.3/protobuf-java-4.29.3.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )
+
+    # Guava — ListenableFuture used in AbstractFutureStub public API
+    _maven_jar_repository(
+        name = "maven_guava",
+        url = "https://repo1.maven.org/maven2/com/google/guava/guava/33.3.1-jre/guava-33.3.1-jre.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )
+
+    # FailureAccess — split out of guava; needed when guava is on the compile path
+    _maven_jar_repository(
+        name = "maven_failureaccess",
+        url = "https://repo1.maven.org/maven2/com/google/guava/failureaccess/1.0.2/failureaccess-1.0.2.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )
+
+    # javax.annotation-api — @Generated annotation on protoc-gen-grpc-java output
+    _maven_jar_repository(
+        name = "maven_javax_annotation",
+        url = "https://repo1.maven.org/maven2/javax/annotation/javax.annotation-api/1.3.2/javax.annotation-api-1.3.2.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )
+
+    # perfmark-api — used by grpc-core ClientCallImpl for tracing; required at runtime
+    _maven_jar_repository(
+        name = "maven_perfmark_api",
+        url = "https://repo1.maven.org/maven2/io/perfmark/perfmark-api/0.27.0/perfmark-api-0.27.0.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )
+
+    # error_prone_annotations — annotation-only jar; guards against missing annotation class
+    _maven_jar_repository(
+        name = "maven_error_prone_annotations",
+        url = "https://repo1.maven.org/maven2/com/google/errorprone/error_prone_annotations/2.28.0/error_prone_annotations-2.28.0.jar",
+        build_file = "//external_tool:BUILD.maven_jar.bazel",
+    )

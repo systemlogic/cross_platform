@@ -167,18 +167,20 @@ def _java_proto_library_impl(ctx):
 
     all_sources = depset(transitive = [dep[ProtoInfo].transitive_sources for dep in ctx.attr.deps])
 
-    out_dir = ctx.actions.declare_directory(ctx.label.name + "_java_srcs")
+    # protoc writes a srcjar when the output path ends in .srcjar (supported since protobuf 3.x).
+    # java_library.srcs handles .srcjar natively; declare_directory does not expand in srcs.
+    out_srcjar = ctx.actions.declare_file(ctx.label.name + "_java_srcs.srcjar")
 
     _run_protoc(
         ctx = ctx,
         toolchain = toolchain,
         direct_sources = direct_sources,
         all_sources = all_sources,
-        lang_flag = "--java_out=" + out_dir.path,
-        outputs = [out_dir],
+        lang_flag = "--java_out=" + out_srcjar.path,
+        outputs = [out_srcjar],
     )
 
-    return [DefaultInfo(files = depset([out_dir]))]
+    return [DefaultInfo(files = depset([out_srcjar]))]
 
 java_proto_library = rule(
     implementation = _java_proto_library_impl,
@@ -206,19 +208,20 @@ def _java_grpc_library_impl(ctx):
 
     all_sources = depset(transitive = [dep[ProtoInfo].transitive_sources for dep in ctx.attr.deps])
 
-    out_dir = ctx.actions.declare_directory(ctx.label.name + "_java_grpc_srcs")
+    # Use .srcjar output so java_library.srcs handles it natively.
+    out_srcjar = ctx.actions.declare_file(ctx.label.name + "_java_grpc_srcs.srcjar")
 
     _run_protoc(
         ctx = ctx,
         toolchain = toolchain,
         direct_sources = direct_sources,
         all_sources = all_sources,
-        lang_flag = "--grpc-java_out=" + out_dir.path,
-        outputs = [out_dir],
+        lang_flag = "--grpc-java_out=" + out_srcjar.path,
+        outputs = [out_srcjar],
         plugins = [toolchain.grpc_java_plugin],
     )
 
-    return [DefaultInfo(files = depset([out_dir]))]
+    return [DefaultInfo(files = depset([out_srcjar]))]
 
 java_grpc_library = rule(
     implementation = _java_grpc_library_impl,
