@@ -5,6 +5,7 @@ load(
     "gcc_9_arm64_repository",
     "gcc_9_x86_64_repository",
     "gcc_aarch64_native_repository",
+    "grpc_java_maven_repositories",
     "jdk_temurin_21_linux_aarch64_repository",
     "jdk_temurin_21_linux_x86_64_repository",
     "jdk_temurin_21_macos_arm64_repository",
@@ -91,6 +92,9 @@ def _toolchain_ext_impl(module_ctx):
     protoc_gen_grpc_java_macos_x86_64_repository(name = "protoc_gen_grpc_java_macos_x86_64")
     protoc_gen_grpc_java_linux_x86_64_repository(name = "protoc_gen_grpc_java_linux_x86_64")
     protoc_gen_grpc_java_linux_aarch64_repository(name = "protoc_gen_grpc_java_linux_aarch64")
+
+    # gRPC Java 1.68.0 Maven JARs — downloaded via Bazel's http downloader (no host JVM).
+    grpc_java_maven_repositories()
 
 toolchain_ext = module_extension(
     implementation = _toolchain_ext_impl,

@@ -1,0 +1,9 @@
+load("@rules_java//java:defs.bzl", "java_import")
+
+# Downloaded by maven_jar_repository; Bazel's built-in http downloader fetches
+# the JAR — no host JVM or Maven tooling required.
+java_import(
+    name = "jar",
+    jars = ["lib.jar"],
+    visibility = ["//visibility:public"],
+)
