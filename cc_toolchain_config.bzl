@@ -59,6 +59,10 @@ def _impl(ctx):
         ),
     ]
 
+    builtin_includes = ["/", base_path + "/lib/gcc"]
+    if ctx.attr.gcc_builtin_include_dir:
+        builtin_includes = builtin_includes + [ctx.attr.gcc_builtin_include_dir]
+
     return cc_common.create_cc_toolchain_config_info(
         ctx = ctx,
         features = features,
@@ -72,10 +76,7 @@ def _impl(ctx):
         abi_libc_version = "unknown",
         tool_paths = tool_paths,
         builtin_sysroot = sysroot_path,
-        cxx_builtin_include_directories = [
-            "/",
-            base_path + "/lib/gcc",
-        ],
+        cxx_builtin_include_directories = builtin_includes,
     )
 
 cc_toolchain_config = rule(
@@ -90,5 +91,10 @@ cc_toolchain_config = rule(
         # Optional override for the sysroot subdirectory under sysroot_path.
         # Defaults to arch-derived path when empty.
         "sysroot_subdir": attr.string(default = ""),
+        # Extra GCC internal include directory for toolchains whose compiler is
+        # relocated from its original installation prefix (e.g. Ubuntu cross-compiler
+        # packages extracted to a Bazel repository). Added to cxx_builtin_include_dirs
+        # so Bazel tracks headers from the versioned GCC include path correctly.
+        "gcc_builtin_include_dir": attr.string(default = ""),
     },
 )

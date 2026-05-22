@@ -16,17 +16,17 @@ build --tool_java_language_version=21
 build --tool_java_runtime_version=21
 
 # Linux arm64 target.
-# On x86_64 exec: selects gcc_arm64_toolchain (ARM cross-compiler).
-# On aarch64 exec: selects gcc_arm64_native_toolchain (LLVM aarch64 + Bootlin aarch64 sysroot).
+# On x86_64 exec: selects gcc_arm64_toolchain (ARM GCC 9.2 cross-compiler).
+# On aarch64 exec: selects gcc_arm64_native_toolchain (ARM GCC 14.2 aarch64-hosted).
 build:arm64 --platforms=//:arm64_platform
 build:arm64 --cpu=arm64
 build:arm64 --extra_toolchains=//:gcc_arm64_toolchain,//:gcc_arm64_native_toolchain
 
 # Linux x86_64 target.
 # On x86_64 exec: selects gcc_x86_64_toolchain (Bootlin native x86_64 GCC).
-# On aarch64 exec: selects clang_x86_64_on_linux_aarch64_toolchain (LLVM + Bootlin sysroot).
+# On aarch64 exec: selects gcc_x86_64_on_linux_aarch64_toolchain (Ubuntu GCC 12 cross-compiler).
 build:x86_64 --platforms=//:x86_64_platform
-build:x86_64 --extra_toolchains=//:gcc_x86_64_toolchain,//:clang_x86_64_on_linux_aarch64_toolchain
+build:x86_64 --extra_toolchains=//:gcc_x86_64_toolchain,//:gcc_x86_64_on_linux_aarch64_toolchain
 
 # macOS platforms — downloaded LLVM, no host compiler used.
 # Toolchain is auto-selected via register_toolchains in MODULE.bazel based on exec constraints:

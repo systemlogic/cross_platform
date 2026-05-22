@@ -214,7 +214,7 @@
   "moduleExtensions": {
     "//:toolchain_extension.bzl%toolchain_ext": {
       "general": {
-        "bzlTransitiveDigest": "3X/Klu48thWUr55HO+1eRCs3OSvlG9bJQNWBXj61Uu4=",
+        "bzlTransitiveDigest": "oK0WK/5EvxhATrXOqbmrLD8jPOyDknH7F+o+KYsW0dg=",
         "usagesDigest": "Bk4vGo2l5xAhnr6O986BijcF6PfzP/LxjF0MMkpCxY4=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
@@ -244,17 +244,24 @@
               ]
             }
           },
-          "gcc_aarch64_native": {
+          "gcc_14_arm64_aarch64_hosted": {
             "repoRuleId": "@@//:toolchain_repositories.bzl%toolchain_archive_repository",
             "attributes": {
               "urls": [
-                "https://toolchains.bootlin.com/downloads/releases/toolchains/aarch64/tarballs/aarch64--glibc--stable-2024.02-1.tar.bz2"
+                "https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-aarch64-aarch64-none-linux-gnu.tar.xz"
               ],
-              "strip_prefix": "aarch64--glibc--stable-2024.02-1",
-              "build_file": "@@//external_tool:BUILD.gcc_aarch64_native.bazel",
+              "sha256": "299c56db1644c135670afabbf801b97a42e5ef6069d73157ab869458cbda2096",
+              "strip_prefix": "arm-gnu-toolchain-14.2.rel1-aarch64-aarch64-none-linux-gnu",
+              "build_file": "@@//external_tool:BUILD.gcc_9_arm64.bazel",
               "patch_cmds": [
-                "SYSROOT=aarch64-buildroot-linux-gnu/sysroot; for LIBC_SO in \"$SYSROOT/usr/lib/libc.so\" \"$SYSROOT/usr/lib64/libc.so\"; do if [ -f \"$LIBC_SO\" ]; then sed -i 's# /lib/# =/lib/#g' \"$LIBC_SO\"; sed -i 's# /usr/lib/# =/usr/lib/#g' \"$LIBC_SO\"; sed -i 's# /lib64/# =/lib64/#g' \"$LIBC_SO\"; sed -i 's# /usr/lib64/# =/usr/lib64/#g' \"$LIBC_SO\"; fi; done"
+                "SYSROOT=aarch64-none-linux-gnu/libc; for SO in \"$SYSROOT/usr/lib/libc.so\" \"$SYSROOT/usr/lib64/libc.so\" \"$SYSROOT/usr/lib/libm.so\" \"$SYSROOT/usr/lib64/libm.so\"; do if [ -f \"$SO\" ] && head -1 \"$SO\" | grep -q 'GNU ld script'; then sed -i 's# /lib/# =/lib/#g' \"$SO\"; sed -i 's# /usr/lib/# =/usr/lib/#g' \"$SO\"; sed -i 's# /lib64/# =/lib64/#g' \"$SO\"; sed -i 's# /usr/lib64/# =/usr/lib64/#g' \"$SO\"; fi; done"
               ]
+            }
+          },
+          "gcc_x86_64_on_aarch64": {
+            "repoRuleId": "@@//:toolchain_repositories.bzl%_gcc_x86_64_on_aarch64_rule",
+            "attributes": {
+              "build_file": "@@//external_tool:BUILD.gcc_9_x86_64.bazel"
             }
           },
           "llvm_macos_arm64": {

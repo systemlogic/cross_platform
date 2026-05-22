@@ -4,7 +4,8 @@ load(
     "//:toolchain_repositories.bzl",
     "gcc_9_arm64_repository",
     "gcc_9_x86_64_repository",
-    "gcc_aarch64_native_repository",
+    "gcc_14_arm64_aarch64_hosted_repository",
+    "gcc_x86_64_on_aarch64_repository",
     "grpc_java_maven_repositories",
     "jdk_temurin_21_linux_aarch64_repository",
     "jdk_temurin_21_linux_x86_64_repository",
@@ -38,10 +39,13 @@ def _toolchain_ext_impl(module_ctx):
     gcc_9_x86_64_repository(name = "gcc_9_x86_64")
     gcc_9_arm64_repository(name = "gcc_9_arm64")
 
-    # Bootlin aarch64 sysroot (headers/libs for aarch64 Linux target).
-    # The compiler binaries in this tarball are x86_64-hosted; the actual
-    # compiler on aarch64 exec machines comes from llvm_linux_aarch64.
-    gcc_aarch64_native_repository(name = "gcc_aarch64_native")
+    # ARM GNU Toolchain 14.2.rel1 — aarch64-hosted, targeting aarch64-none-linux-gnu.
+    # Used on aarch64 exec machines to compile Linux arm64 targets natively.
+    gcc_14_arm64_aarch64_hosted_repository(name = "gcc_14_arm64_aarch64_hosted")
+
+    # GCC 12 cross-compiler for x86_64 Linux target — runs on aarch64 exec machines.
+    # Assembled from Ubuntu 22.04 arm64 .deb packages (hermetic, no apt-get).
+    gcc_x86_64_on_aarch64_repository(name = "gcc_x86_64_on_aarch64")
 
     # macOS LLVM 18 (exec: macos/arm64) — no host compiler used.
     # LLVM no longer ships x86_64-macOS binaries; ARM64 exec cross-compiles to x86_64 via -target.
