@@ -14,6 +14,22 @@ load(
     "llvm_macos_arm64_repository",
     "llvm_macos_x86_64_repository",
     "macos_sdk_repository",
+    "protoc_linux_aarch64_repository",
+    "protoc_linux_x86_64_repository",
+    "protoc_macos_arm64_repository",
+    "protoc_macos_x86_64_repository",
+    "protoc_gen_go_linux_aarch64_repository",
+    "protoc_gen_go_linux_x86_64_repository",
+    "protoc_gen_go_macos_arm64_repository",
+    "protoc_gen_go_macos_x86_64_repository",
+    "protoc_gen_go_grpc_linux_aarch64_repository",
+    "protoc_gen_go_grpc_linux_x86_64_repository",
+    "protoc_gen_go_grpc_macos_arm64_repository",
+    "protoc_gen_go_grpc_macos_x86_64_repository",
+    "protoc_gen_grpc_java_linux_aarch64_repository",
+    "protoc_gen_grpc_java_linux_x86_64_repository",
+    "protoc_gen_grpc_java_macos_arm64_repository",
+    "protoc_gen_grpc_java_macos_x86_64_repository",
 )
 
 def _toolchain_ext_impl(module_ctx):
@@ -51,6 +67,30 @@ def _toolchain_ext_impl(module_ctx):
     jdk_temurin_21_macos_x86_64_repository(name = "jdk_macos_x86_64")
     jdk_temurin_21_linux_x86_64_repository(name = "jdk_linux_x86_64")
     jdk_temurin_21_linux_aarch64_repository(name = "jdk_linux_aarch64")
+
+    # protoc 29.3 — one per exec platform.
+    protoc_macos_arm64_repository(name = "protoc_macos_arm64")
+    protoc_macos_x86_64_repository(name = "protoc_macos_x86_64")
+    protoc_linux_x86_64_repository(name = "protoc_linux_x86_64")
+    protoc_linux_aarch64_repository(name = "protoc_linux_aarch64")
+
+    # protoc-gen-go v1.35.2 — Go protobuf message generator.
+    protoc_gen_go_macos_arm64_repository(name = "protoc_gen_go_macos_arm64")
+    protoc_gen_go_macos_x86_64_repository(name = "protoc_gen_go_macos_x86_64")
+    protoc_gen_go_linux_x86_64_repository(name = "protoc_gen_go_linux_x86_64")
+    protoc_gen_go_linux_aarch64_repository(name = "protoc_gen_go_linux_aarch64")
+
+    # protoc-gen-go-grpc v1.5.1 — Go gRPC service stub generator.
+    protoc_gen_go_grpc_macos_arm64_repository(name = "protoc_gen_go_grpc_macos_arm64")
+    protoc_gen_go_grpc_macos_x86_64_repository(name = "protoc_gen_go_grpc_macos_x86_64")
+    protoc_gen_go_grpc_linux_x86_64_repository(name = "protoc_gen_go_grpc_linux_x86_64")
+    protoc_gen_go_grpc_linux_aarch64_repository(name = "protoc_gen_go_grpc_linux_aarch64")
+
+    # protoc-gen-grpc-java 1.68.0 — Java gRPC service stub generator.
+    protoc_gen_grpc_java_macos_arm64_repository(name = "protoc_gen_grpc_java_macos_arm64")
+    protoc_gen_grpc_java_macos_x86_64_repository(name = "protoc_gen_grpc_java_macos_x86_64")
+    protoc_gen_grpc_java_linux_x86_64_repository(name = "protoc_gen_grpc_java_linux_x86_64")
+    protoc_gen_grpc_java_linux_aarch64_repository(name = "protoc_gen_grpc_java_linux_aarch64")
 
 toolchain_ext = module_extension(
     implementation = _toolchain_ext_impl,

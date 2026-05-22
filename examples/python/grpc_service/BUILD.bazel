@@ -1,0 +1,49 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+
+# Build and run:
+#   ./bazel run //examples/python/grpc_service:server
+#   ./bazel run //examples/python/grpc_service:client -- world
+# Test:
+#   ./bazel test //examples/python/grpc_service:server_test
+
+py_library(
+    name = "server_lib",
+    srcs = ["server_lib.py"],
+    imports = ["."],
+    deps = [
+        "//examples/proto:greeter_py_grpc_lib",
+        "@pip//grpcio",
+    ],
+)
+
+py_binary(
+    name = "server",
+    srcs = ["server.py"],
+    main = "server.py",
+    deps = [
+        ":server_lib",
+        "//examples/proto:greeter_py_grpc_lib",
+        "@pip//grpcio",
+    ],
+)
+
+py_binary(
+    name = "client",
+    srcs = ["client.py"],
+    main = "client.py",
+    deps = [
+        "//examples/proto:greeter_py_grpc_lib",
+        "@pip//grpcio",
+    ],
+)
+
+py_test(
+    name = "server_test",
+    srcs = ["server_test.py"],
+    main = "server_test.py",
+    deps = [
+        ":server_lib",
+        "//examples/proto:greeter_py_grpc_lib",
+        "@pip//grpcio",
+    ],
+)

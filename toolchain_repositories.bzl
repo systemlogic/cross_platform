@@ -257,3 +257,251 @@ def llvm_macos_x86_64_repository(name):
         strip_prefix = "clang+llvm-17.0.6-x86_64-apple-darwin22.0",
         build_file = "//external_tool:BUILD.llvm_macos.bazel",
     )
+
+# =============================================================================
+# protoc 29.3 — one per exec platform
+#
+# Archive layout (no top-level directory, strip_prefix = ""):
+#   bin/protoc
+#   include/google/protobuf/*.proto
+#
+# sha256 values: run `shasum -a 256 <file>` after first download and fill in.
+# =============================================================================
+
+def protoc_linux_x86_64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/protocolbuffers/protobuf/releases/download/v29.3/protoc-29.3-linux-x86_64.zip"],
+        sha256 = "",
+        strip_prefix = "",
+        build_file = "//external_tool:BUILD.protoc.bazel",
+    )
+
+def protoc_linux_aarch64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/protocolbuffers/protobuf/releases/download/v29.3/protoc-29.3-linux-aarch_64.zip"],
+        sha256 = "",
+        strip_prefix = "",
+        build_file = "//external_tool:BUILD.protoc.bazel",
+    )
+
+def protoc_macos_arm64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/protocolbuffers/protobuf/releases/download/v29.3/protoc-29.3-osx-aarch_64.zip"],
+        sha256 = "",
+        strip_prefix = "",
+        build_file = "//external_tool:BUILD.protoc.bazel",
+    )
+
+def protoc_macos_x86_64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/protocolbuffers/protobuf/releases/download/v29.3/protoc-29.3-osx-x86_64.zip"],
+        sha256 = "",
+        strip_prefix = "",
+        build_file = "//external_tool:BUILD.protoc.bazel",
+    )
+
+# =============================================================================
+# protoc-gen-go v1.35.2 — protobuf Go code generator
+# Archive contains a single binary: protoc-gen-go
+# =============================================================================
+
+def protoc_gen_go_linux_x86_64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/protocolbuffers/protobuf-go/releases/download/v1.35.2/protoc-gen-go.v1.35.2.linux.amd64.tar.gz"],
+        sha256 = "",
+        strip_prefix = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+def protoc_gen_go_linux_aarch64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/protocolbuffers/protobuf-go/releases/download/v1.35.2/protoc-gen-go.v1.35.2.linux.arm64.tar.gz"],
+        sha256 = "",
+        strip_prefix = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+def protoc_gen_go_macos_arm64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/protocolbuffers/protobuf-go/releases/download/v1.35.2/protoc-gen-go.v1.35.2.darwin.arm64.tar.gz"],
+        sha256 = "",
+        strip_prefix = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+def protoc_gen_go_macos_x86_64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/protocolbuffers/protobuf-go/releases/download/v1.35.2/protoc-gen-go.v1.35.2.darwin.amd64.tar.gz"],
+        sha256 = "",
+        strip_prefix = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+# =============================================================================
+# protoc-gen-go-grpc v1.5.1 — gRPC Go service stub generator
+# Archive contains a single binary: protoc-gen-go-grpc
+# =============================================================================
+
+def protoc_gen_go_grpc_linux_x86_64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/grpc/grpc-go/releases/download/cmd%2Fprotoc-gen-go-grpc%2Fv1.5.1/protoc-gen-go-grpc.v1.5.1.linux.amd64.tar.gz"],
+        sha256 = "",
+        strip_prefix = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+def protoc_gen_go_grpc_linux_aarch64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/grpc/grpc-go/releases/download/cmd%2Fprotoc-gen-go-grpc%2Fv1.5.1/protoc-gen-go-grpc.v1.5.1.linux.arm64.tar.gz"],
+        sha256 = "",
+        strip_prefix = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+def protoc_gen_go_grpc_macos_arm64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/grpc/grpc-go/releases/download/cmd%2Fprotoc-gen-go-grpc%2Fv1.5.1/protoc-gen-go-grpc.v1.5.1.darwin.arm64.tar.gz"],
+        sha256 = "",
+        strip_prefix = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+def protoc_gen_go_grpc_macos_x86_64_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://github.com/grpc/grpc-go/releases/download/cmd%2Fprotoc-gen-go-grpc%2Fv1.5.1/protoc-gen-go-grpc.v1.5.1.darwin.amd64.tar.gz"],
+        sha256 = "",
+        strip_prefix = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+# =============================================================================
+# protoc-gen-grpc-java 1.68.0 — gRPC Java service stub generator
+#
+# Distributed as a standalone executable (not an archive) from Maven Central.
+# The .exe extension is misleading — these are native ELF/Mach-O binaries.
+# =============================================================================
+
+def _grpc_java_plugin_impl(repository_ctx):
+    repository_ctx.download(
+        url = repository_ctx.attr.url,
+        output = "protoc-gen-grpc-java",
+        sha256 = repository_ctx.attr.sha256,
+        executable = True,
+    )
+    repository_ctx.symlink(
+        repository_ctx.path(repository_ctx.attr.build_file),
+        "BUILD.bazel",
+    )
+
+_grpc_java_plugin_repository = repository_rule(
+    implementation = _grpc_java_plugin_impl,
+    attrs = {
+        "url": attr.string(mandatory = True),
+        "sha256": attr.string(default = ""),
+        "build_file": attr.label(mandatory = True, allow_single_file = True),
+    },
+)
+
+def protoc_gen_grpc_java_linux_x86_64_repository(name):
+    _grpc_java_plugin_repository(
+        name = name,
+        url = "https://repo1.maven.org/maven2/io/grpc/protoc-gen-grpc-java/1.68.0/protoc-gen-grpc-java-1.68.0-linux-x86_64.exe",
+        sha256 = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+def protoc_gen_grpc_java_linux_aarch64_repository(name):
+    _grpc_java_plugin_repository(
+        name = name,
+        url = "https://repo1.maven.org/maven2/io/grpc/protoc-gen-grpc-java/1.68.0/protoc-gen-grpc-java-1.68.0-linux-aarch_64.exe",
+        sha256 = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+def protoc_gen_grpc_java_macos_arm64_repository(name):
+    _grpc_java_plugin_repository(
+        name = name,
+        url = "https://repo1.maven.org/maven2/io/grpc/protoc-gen-grpc-java/1.68.0/protoc-gen-grpc-java-1.68.0-osx-aarch_64.exe",
+        sha256 = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+def protoc_gen_grpc_java_macos_x86_64_repository(name):
+    _grpc_java_plugin_repository(
+        name = name,
+        url = "https://repo1.maven.org/maven2/io/grpc/protoc-gen-grpc-java/1.68.0/protoc-gen-grpc-java-1.68.0-osx-x86_64.exe",
+        sha256 = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+# =============================================================================
+# grpc_python_plugin 1.68.0 — gRPC Python service stub generator
+#
+# Distributed as a standalone executable from GitHub releases.
+# Binary is renamed to protoc-gen-grpc_python so protoc uses --grpc_python_out.
+# =============================================================================
+
+def _grpc_python_plugin_impl(repository_ctx):
+    repository_ctx.download(
+        url = repository_ctx.attr.url,
+        output = "protoc-gen-grpc_python",
+        sha256 = repository_ctx.attr.sha256,
+        executable = True,
+    )
+    repository_ctx.symlink(
+        repository_ctx.path(repository_ctx.attr.build_file),
+        "BUILD.bazel",
+    )
+
+_grpc_python_plugin_repository = repository_rule(
+    implementation = _grpc_python_plugin_impl,
+    attrs = {
+        "url": attr.string(mandatory = True),
+        "sha256": attr.string(default = ""),
+        "build_file": attr.label(mandatory = True, allow_single_file = True),
+    },
+)
+
+def grpc_python_plugin_linux_x86_64_repository(name):
+    _grpc_python_plugin_repository(
+        name = name,
+        url = "https://github.com/grpc/grpc/releases/download/v1.68.0/grpc_python_plugin-linux-x86_64.exe",
+        sha256 = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+def grpc_python_plugin_linux_aarch64_repository(name):
+    _grpc_python_plugin_repository(
+        name = name,
+        url = "https://github.com/grpc/grpc/releases/download/v1.68.0/grpc_python_plugin-linux-aarch_64.exe",
+        sha256 = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+def grpc_python_plugin_macos_arm64_repository(name):
+    _grpc_python_plugin_repository(
+        name = name,
+        url = "https://github.com/grpc/grpc/releases/download/v1.68.0/grpc_python_plugin-osx-aarch_64.exe",
+        sha256 = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
+
+def grpc_python_plugin_macos_x86_64_repository(name):
+    _grpc_python_plugin_repository(
+        name = name,
+        url = "https://github.com/grpc/grpc/releases/download/v1.68.0/grpc_python_plugin-osx-x86_64.exe",
+        sha256 = "",
+        build_file = "//external_tool:BUILD.proto_plugin.bazel",
+    )
