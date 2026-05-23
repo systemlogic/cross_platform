@@ -43,8 +43,9 @@ build:debug --compilation_mode=dbg
 build:debug --copt=-DDEBUG_BUILD
 
 # Release: -O2 + -DNDEBUG (via Bazel opt mode), strip debug symbols
+# Platform-specific strip flags (-Wl,--strip-all on Linux, -Wl,-S on macOS) are
+# injected by each toolchain's "strip_flags" feature when opt mode is active.
 build:release --compilation_mode=opt
-build:release --linkopt=-Wl,--strip-all
 
 # Stats: gprof-compatible profiling instrumentation + STATS_ENABLED define
 build:stats --compilation_mode=dbg

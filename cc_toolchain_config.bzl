@@ -1,4 +1,4 @@
-load("@bazel_tools//tools/cpp:cc_toolchain_config_lib.bzl", "feature", "flag_group", "flag_set", "tool_path")
+load("@bazel_tools//tools/cpp:cc_toolchain_config_lib.bzl", "feature", "flag_group", "flag_set", "tool_path", "with_feature_set")
 load("@bazel_tools//tools/build_defs/cc:action_names.bzl", "ACTION_NAMES")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 
@@ -54,6 +54,20 @@ def _impl(ctx):
                         ACTION_NAMES.cpp_link_dynamic_library,
                     ],
                     flag_groups = [flag_group(flags = sysroot_flags + ["-lstdc++", "-lm"])],
+                ),
+            ],
+        ),
+        feature(
+            name = "strip_flags",
+            enabled = True,
+            flag_sets = [
+                flag_set(
+                    actions = [
+                        ACTION_NAMES.cpp_link_executable,
+                        ACTION_NAMES.cpp_link_dynamic_library,
+                    ],
+                    flag_groups = [flag_group(flags = ["-Wl,--strip-all"])],
+                    with_features = [with_feature_set(features = ["opt"])],
                 ),
             ],
         ),
