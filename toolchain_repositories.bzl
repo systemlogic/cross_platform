@@ -246,6 +246,158 @@ def llvm_linux_aarch64_repository(name):
         build_file = "//external_tool:BUILD.llvm_linux.bazel",
     )
 
+# ARM GNU Toolchain 14.2.rel1 — aarch64 Linux hosted, targeting aarch64-none-linux-gnu.
+# The compiler runs on an aarch64 exec machine and produces aarch64 Linux output.
+# Self-contained: includes its own glibc sysroot at aarch64-none-linux-gnu/libc/,
+# matching the layout that cc_toolchain_config.bzl expects.
+# Replaces llvm_linux_aarch64 for the Linux arm64 target on aarch64 exec machines.
+def gcc_14_arm64_aarch64_hosted_repository(name):
+    toolchain_archive_repository(
+        name = name,
+        urls = ["https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-aarch64-aarch64-none-linux-gnu.tar.xz"],
+        sha256 = "299c56db1644c135670afabbf801b97a42e5ef6069d73157ab869458cbda2096",
+        strip_prefix = "arm-gnu-toolchain-14.2.rel1-aarch64-aarch64-none-linux-gnu",
+        build_file = "//external_tool:BUILD.gcc_9_arm64.bazel",
+        patch_cmds = [
+            "SYSROOT=aarch64-none-linux-gnu/libc; " +
+            "for SO in \"$SYSROOT/usr/lib/libc.so\" \"$SYSROOT/usr/lib64/libc.so\" \"$SYSROOT/usr/lib/libm.so\" \"$SYSROOT/usr/lib64/libm.so\"; do " +
+            "if [ -f \"$SO\" ] && head -1 \"$SO\" | grep -q 'GNU ld script'; then " +
+            "sed -i 's# /lib/# =/lib/#g' \"$SO\"; " +
+            "sed -i 's# /usr/lib/# =/usr/lib/#g' \"$SO\"; " +
+            "sed -i 's# /lib64/# =/lib64/#g' \"$SO\"; " +
+            "sed -i 's# /usr/lib64/# =/usr/lib64/#g' \"$SO\"; " +
+            "fi; " +
+            "done",
+        ],
+    )
+
+# GCC 12 cross-compiler for x86_64 Linux target — runs on aarch64 exec machines.
+# Downloads Ubuntu 22.04 LTS (Jammy) arm64 packages directly from the Ubuntu archive;
+# no apt-get or host package manager involvement (hermetic http downloads).
+#
+# Three packages are combined into a single repository:
+#   gcc-12-x86-64-linux-gnu   — GCC 12 compiler binary and helper programs
+#   binutils-x86-64-linux-gnu — cross-binutils (ld, ar, objcopy, …)
+#   libgcc-12-dev-amd64-cross — GCC runtime: crtbegin.o, libgcc.a, internal headers
+#
+# A wrapper script at bin/x86_64-linux-gnu-gcc passes -B at runtime so GCC 12 finds
+# its internal files (crt*.o, libgcc.a, compiler headers) relative to the repository.
+# The x86_64 glibc sysroot (headers/libs) is taken from the gcc_9_x86_64 Bootlin repo.
+def _gcc_x86_64_on_aarch64_impl(repository_ctx):
+    pkgs = [
+        (
+            "gcc-12-x86-64-linux-gnu",
+            "http://ports.ubuntu.com/ubuntu-ports/pool/universe/g/gcc-12-cross/" +
+            "gcc-12-x86-64-linux-gnu_12.3.0-1ubuntu1~22.04.3cross1_arm64.deb",
+            "eac763296aecba5a3b2313032a923233ffb241ae561af4615e1aef4a86f3cc73",
+        ),
+        (
+            "binutils-x86-64-linux-gnu",
+            "http://ports.ubuntu.com/ubuntu-ports/pool/main/b/binutils/" +
+            "binutils-x86-64-linux-gnu_2.38-4ubuntu2.12_arm64.deb",
+            "c239870543213279089e49b4b7aee015559ed17d0937442b1ce3740d7c88a8e5",
+        ),
+        (
+            "libgcc-12-dev-amd64-cross",
+            "http://ports.ubuntu.com/ubuntu-ports/pool/universe/g/gcc-12-cross/" +
+            "libgcc-12-dev-amd64-cross_12.3.0-1ubuntu1~22.04.3cross1_all.deb",
+            "c7cee2018704a3964cda9c9d575103922f2e73fffe03749ce19b344d1ef071ee",
+        ),
+        (
+            "cpp-12-x86-64-linux-gnu",
+            "http://ports.ubuntu.com/ubuntu-ports/pool/universe/g/gcc-12-cross/" +
+            "cpp-12-x86-64-linux-gnu_12.3.0-1ubuntu1~22.04.3cross1_arm64.deb",
+            "169faa995975e8974136655e7b287559f887c58761e046ce7d287260f3f15709",
+        ),
+        (
+            "g++-12-x86-64-linux-gnu",
+            "http://ports.ubuntu.com/ubuntu-ports/pool/universe/g/gcc-12-cross/" +
+            "g++-12-x86-64-linux-gnu_12.3.0-1ubuntu1~22.04.3cross1_arm64.deb",
+            "887b1906979bc79b1951a54a65e77a7b066ff2df6a6b232254c251a98fd154a1",
+        ),
+        (
+            "libstdc++-12-dev-amd64-cross",
+            "http://ports.ubuntu.com/ubuntu-ports/pool/universe/g/gcc-12-cross/" +
+            "libstdc++-12-dev-amd64-cross_12.3.0-1ubuntu1~22.04.3cross1_all.deb",
+            "22c59d4414dda1dbc1c388ba5a3048461e02e53425b4faf3a82f876d4850c596",
+        ),
+        # cc1 (from cpp-12-x86-64-linux-gnu) links against these shared libraries at runtime.
+        (
+            "libisl23",
+            "http://ports.ubuntu.com/ubuntu-ports/pool/main/i/isl/" +
+            "libisl23_0.24-2build1_arm64.deb",
+            "1e6e12c1ec8aa83839fe9451b533bfe5bf63b44b0e66a71c1e41706c481fb6e9",
+        ),
+        (
+            "libmpc3",
+            "http://ports.ubuntu.com/ubuntu-ports/pool/main/m/mpclib3/" +
+            "libmpc3_1.2.1-2build1_arm64.deb",
+            "7f6fc0fdb744474a5f49077c37bc848af64392eb970fddf447092f190a3fe635",
+        ),
+        (
+            "libmpfr6",
+            "http://ports.ubuntu.com/ubuntu-ports/pool/main/m/mpfr4/" +
+            "libmpfr6_4.1.0-3build3_arm64.deb",
+            "cef55f2fe8a149d8d460140a10b8e8539ada9f7fbfa3a44f77ac2a049b3baaa2",
+        ),
+    ]
+
+    for (pkg_name, url, sha256) in pkgs:
+        deb = "_{}.deb".format(pkg_name)
+        repository_ctx.download(url = url, output = deb, sha256 = sha256)
+        # Use dpkg-deb by full path to avoid sandbox PATH restrictions.
+        result = repository_ctx.execute(["/usr/bin/dpkg-deb", "--extract", deb, "."])
+        if result.return_code != 0:
+            fail("Failed to extract {}: {}".format(pkg_name, result.stderr))
+        repository_ctx.execute(["rm", "-f", deb])
+
+    setup = repository_ctx.execute([
+        "bash", "-c",
+        r"""set -e
+mkdir -p bin
+cat > bin/x86_64-linux-gnu-gcc << 'WRAPPER_EOF'
+#!/bin/bash
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export LD_LIBRARY_PATH="$REPO/usr/lib/aarch64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$REPO/usr/bin/x86_64-linux-gnu-gcc-12" \
+    -B "$REPO/usr/lib/gcc-cross/x86_64-linux-gnu/12/" \
+    "$@"
+WRAPPER_EOF
+chmod +x bin/x86_64-linux-gnu-gcc
+ln -sf x86_64-linux-gnu-gcc bin/x86_64-linux-gnu-cpp
+ln -sf x86_64-linux-gnu-gcc bin/x86_64-linux-gnu-g++
+for t in ar as ld nm objcopy objdump ranlib readelf strip; do
+    cat > "bin/x86_64-linux-gnu-$t" << TOOL_EOF
+#!/bin/bash
+REPO="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
+export LD_LIBRARY_PATH="\$REPO/usr/lib/aarch64-linux-gnu\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+exec "\$REPO/usr/bin/x86_64-linux-gnu-$t" "\$@"
+TOOL_EOF
+    chmod +x "bin/x86_64-linux-gnu-$t"
+done
+""",
+    ])
+    if setup.return_code != 0:
+        fail("Failed to create bin/ wrappers: " + setup.stderr)
+
+    repository_ctx.symlink(
+        repository_ctx.path(repository_ctx.attr.build_file),
+        "BUILD.bazel",
+    )
+
+_gcc_x86_64_on_aarch64_rule = repository_rule(
+    implementation = _gcc_x86_64_on_aarch64_impl,
+    attrs = {
+        "build_file": attr.label(mandatory = True, allow_single_file = True),
+    },
+)
+
+def gcc_x86_64_on_aarch64_repository(name):
+    _gcc_x86_64_on_aarch64_rule(
+        name = name,
+        build_file = "//external_tool:BUILD.gcc_9_x86_64.bazel",
+    )
+
 # LLVM 17.0.6 for macOS x86_64 — runs on an Intel Mac exec machine.
 # LLVM 18+ no longer ships macOS x86_64 pre-built binaries; 17.0.6 is the
 # latest release that does.  Can cross-compile to both x86_64-apple-macos10.15

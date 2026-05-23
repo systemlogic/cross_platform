@@ -1,6 +1,5 @@
 load("@rules_cc//cc:defs.bzl", "cc_toolchain")
 load(":cc_toolchain_config.bzl", "cc_toolchain_config")
-load(":linux_llvm_toolchain_config.bzl", "cc_linux_llvm_toolchain_config")
 load(":macos_toolchain_config.bzl", "cc_macos_toolchain_config")
 load("@macos_sdk//:sdk_path.bzl", "MACOS_SDK_PATH")
 load("//proto:proto_toolchain.bzl", "proto_toolchain")
@@ -11,15 +10,15 @@ package(default_visibility = ["//visibility:public"])
 filegroup(name = "empty")
 
 # =============================================================================
-# Linux Toolchains — GCC cross-compilers downloaded from Bootlin / ARM
+# Linux Toolchains — GCC cross-compilers downloaded from Bootlin / ARM / Ubuntu
 #
 # exec: Linux x86_64
-#   gcc_x86_64_toolchain  →  target: Linux x86_64  (Bootlin native x86_64 GCC)
-#   gcc_arm64_toolchain   →  target: Linux arm64   (ARM cross-compiler)
+#   gcc_x86_64_toolchain  →  target: Linux x86_64  (Bootlin native x86_64 GCC 9)
+#   gcc_arm64_toolchain   →  target: Linux arm64   (ARM x86_64-hosted cross-compiler GCC 9)
 #
 # exec: Linux aarch64
-#   gcc_arm64_native_toolchain        →  target: Linux arm64  (LLVM aarch64 + Bootlin aarch64 sysroot)
-#   clang_x86_64_on_linux_aarch64_toolchain →  target: Linux x86_64  (LLVM aarch64 + Bootlin x86_64 sysroot)
+#   gcc_arm64_native_toolchain            →  target: Linux arm64  (ARM aarch64-hosted GCC 14.2)
+#   gcc_x86_64_on_linux_aarch64_toolchain →  target: Linux x86_64 (Ubuntu aarch64-hosted GCC 12 cross-compiler)
 # =============================================================================
 
 # --- exec: Linux x86_64 / target: Linux x86_64 ---
@@ -84,37 +83,25 @@ toolchain(
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
-# --- exec: Linux aarch64 / target: Linux arm64 (LLVM aarch64 + Bootlin aarch64 sysroot) ---
-# Bootlin's aarch64--glibc tarball contains x86_64-hosted binaries (cross-compiler).
-# Use aarch64-hosted LLVM instead for the compiler; keep the Bootlin sysroot for headers/libs.
-filegroup(
-    name = "llvm_linux_aarch64_with_aarch64_sysroot_files",
-    srcs = [
-        "@llvm_linux_aarch64//:all_files",
-        "@gcc_aarch64_native//:all_files",
-    ],
-)
-
-cc_linux_llvm_toolchain_config(
+# --- exec: Linux aarch64 / target: Linux arm64 (ARM GCC 14.2 aarch64-native) ---
+# gcc_14_arm64_aarch64_hosted is self-contained: compiler + sysroot at
+# aarch64-none-linux-gnu/libc/ (same layout as gcc_9_arm64 on x86_64 exec).
+cc_toolchain_config(
     name = "arm64_on_aarch64_config",
     cpu = "arm64",
-    clang_path = "external/+toolchain_ext+llvm_linux_aarch64/bin/clang",
-    ar_path    = "external/+toolchain_ext+llvm_linux_aarch64/bin/llvm-ar",
-    ld_path    = "external/+toolchain_ext+llvm_linux_aarch64/bin/ld.lld",
-    nm_path    = "external/+toolchain_ext+llvm_linux_aarch64/bin/llvm-nm",
-    strip_path = "external/+toolchain_ext+llvm_linux_aarch64/bin/llvm-strip",
-    target_triple     = "aarch64-buildroot-linux-gnu",
-    sysroot_path      = "external/+toolchain_ext+gcc_aarch64_native/aarch64-buildroot-linux-gnu/sysroot",
-    gcc_toolchain     = "external/+toolchain_ext+gcc_aarch64_native",
-    clang_include_dir = "external/+toolchain_ext+llvm_linux_aarch64/lib/clang/18/include",
+    gcc_path = "external/+toolchain_ext+gcc_14_arm64_aarch64_hosted/bin/aarch64-none-linux-gnu-gcc",
+    ld_path  = "external/+toolchain_ext+gcc_14_arm64_aarch64_hosted/bin/aarch64-none-linux-gnu-ld",
+    ar_path  = "external/+toolchain_ext+gcc_14_arm64_aarch64_hosted/bin/aarch64-none-linux-gnu-ar",
+    cpp_path = "external/+toolchain_ext+gcc_14_arm64_aarch64_hosted/bin/aarch64-none-linux-gnu-cpp",
+    sysroot_path = "external/+toolchain_ext+gcc_14_arm64_aarch64_hosted",
 )
 
 cc_toolchain(
     name = "cc_arm64_on_aarch64",
-    all_files      = ":llvm_linux_aarch64_with_aarch64_sysroot_files",
-    ar_files       = ":llvm_linux_aarch64_with_aarch64_sysroot_files",
-    compiler_files = ":llvm_linux_aarch64_with_aarch64_sysroot_files",
-    linker_files   = ":llvm_linux_aarch64_with_aarch64_sysroot_files",
+    all_files      = "@gcc_14_arm64_aarch64_hosted//:all_files",
+    ar_files       = "@gcc_14_arm64_aarch64_hosted//:all_files",
+    compiler_files = "@gcc_14_arm64_aarch64_hosted//:all_files",
+    linker_files   = "@gcc_14_arm64_aarch64_hosted//:all_files",
     dwp_files      = ":empty",
     objcopy_files  = ":empty",
     strip_files    = ":empty",
@@ -129,35 +116,34 @@ toolchain(
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
-# --- exec: Linux aarch64 / target: Linux x86_64 (LLVM aarch64 + Bootlin x86_64 sysroot) ---
+# --- exec: Linux aarch64 / target: Linux x86_64 (Ubuntu GCC 12 aarch64-hosted cross-compiler) ---
+# gcc_x86_64_on_aarch64 provides the compiler binaries (Ubuntu arm64 packages).
+# gcc_9_x86_64 provides the x86_64 glibc sysroot (headers/libs).
 filegroup(
-    name = "llvm_linux_aarch64_with_x86_64_sysroot_files",
+    name = "gcc_x86_64_on_aarch64_files",
     srcs = [
-        "@llvm_linux_aarch64//:all_files",
+        "@gcc_x86_64_on_aarch64//:all_files",
         "@gcc_9_x86_64//:all_files",
     ],
 )
 
-cc_linux_llvm_toolchain_config(
+cc_toolchain_config(
     name = "x86_64_on_linux_aarch64_config",
     cpu = "x86_64",
-    clang_path = "external/+toolchain_ext+llvm_linux_aarch64/bin/clang",
-    ar_path    = "external/+toolchain_ext+llvm_linux_aarch64/bin/llvm-ar",
-    ld_path    = "external/+toolchain_ext+llvm_linux_aarch64/bin/ld.lld",
-    nm_path    = "external/+toolchain_ext+llvm_linux_aarch64/bin/llvm-nm",
-    strip_path = "external/+toolchain_ext+llvm_linux_aarch64/bin/llvm-strip",
-    target_triple     = "x86_64-buildroot-linux-gnu",
-    sysroot_path      = "external/+toolchain_ext+gcc_9_x86_64/x86_64-buildroot-linux-gnu/sysroot",
-    gcc_toolchain     = "external/+toolchain_ext+gcc_9_x86_64",
-    clang_include_dir = "external/+toolchain_ext+llvm_linux_aarch64/lib/clang/18/include",
+    gcc_path = "external/+toolchain_ext+gcc_x86_64_on_aarch64/bin/x86_64-linux-gnu-gcc",
+    ld_path  = "external/+toolchain_ext+gcc_x86_64_on_aarch64/bin/x86_64-linux-gnu-ld",
+    ar_path  = "external/+toolchain_ext+gcc_x86_64_on_aarch64/bin/x86_64-linux-gnu-ar",
+    cpp_path = "external/+toolchain_ext+gcc_x86_64_on_aarch64/bin/x86_64-linux-gnu-cpp",
+    sysroot_path = "external/+toolchain_ext+gcc_9_x86_64",
+    gcc_builtin_include_dir = "external/+toolchain_ext+gcc_x86_64_on_aarch64/usr/lib/gcc-cross/x86_64-linux-gnu/12/include",
 )
 
 cc_toolchain(
     name = "cc_x86_64_on_linux_aarch64",
-    all_files      = ":llvm_linux_aarch64_with_x86_64_sysroot_files",
-    ar_files       = ":llvm_linux_aarch64_with_x86_64_sysroot_files",
-    compiler_files = ":llvm_linux_aarch64_with_x86_64_sysroot_files",
-    linker_files   = ":llvm_linux_aarch64_with_x86_64_sysroot_files",
+    all_files      = ":gcc_x86_64_on_aarch64_files",
+    ar_files       = ":gcc_x86_64_on_aarch64_files",
+    compiler_files = ":gcc_x86_64_on_aarch64_files",
+    linker_files   = ":gcc_x86_64_on_aarch64_files",
     dwp_files      = ":empty",
     objcopy_files  = ":empty",
     strip_files    = ":empty",
@@ -165,7 +151,7 @@ cc_toolchain(
 )
 
 toolchain(
-    name = "clang_x86_64_on_linux_aarch64_toolchain",
+    name = "gcc_x86_64_on_linux_aarch64_toolchain",
     exec_compatible_with   = ["@platforms//os:linux", "@platforms//cpu:aarch64"],
     target_compatible_with = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
     toolchain = ":cc_x86_64_on_linux_aarch64",

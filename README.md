@@ -1,1 +1,1 @@
-# cross_platform
+CLAUDE.md
