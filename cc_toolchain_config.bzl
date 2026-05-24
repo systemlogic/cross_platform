@@ -24,6 +24,30 @@ def _impl(ctx):
     sysroot_flags = ["--sysroot=" + sysroot_path]
 
     features = [
+        feature(name = "supports_pic", enabled = True),
+        feature(
+            name = "pic",
+            enabled = True,
+            flag_sets = [
+                flag_set(
+                    actions = [
+                        ACTION_NAMES.c_compile,
+                        ACTION_NAMES.cpp_compile,
+                        ACTION_NAMES.cpp_header_parsing,
+                        ACTION_NAMES.cpp_module_compile,
+                        ACTION_NAMES.cpp_module_codegen,
+                        ACTION_NAMES.preprocess_assemble,
+                        ACTION_NAMES.linkstamp_compile,
+                    ],
+                    flag_groups = [
+                        flag_group(
+                            flags = ["-fPIC"],
+                            expand_if_available = "pic",
+                        ),
+                    ],
+                ),
+            ],
+        ),
         feature(
             name = "default_compile_flags",
             enabled = True,

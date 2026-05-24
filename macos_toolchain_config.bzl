@@ -1,4 +1,4 @@
-load("@bazel_tools//tools/cpp:cc_toolchain_config_lib.bzl", "feature", "flag_group", "flag_set", "tool_path", "with_feature_set")
+load("@bazel_tools//tools/cpp:cc_toolchain_config_lib.bzl", "feature", "flag_group", "flag_set", "tool_path", "variable_with_value", "with_feature_set")
 load("@bazel_tools//tools/build_defs/cc:action_names.bzl", "ACTION_NAMES")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 
@@ -26,6 +26,152 @@ def _impl(ctx):
         link_flags    = link_flags    + ["-isysroot", sdk_path]
 
     features = [
+        feature(name = "supports_pic", enabled = True),
+        feature(
+            name = "pic",
+            enabled = True,
+            flag_sets = [
+                flag_set(
+                    actions = [
+                        ACTION_NAMES.c_compile,
+                        ACTION_NAMES.cpp_compile,
+                        ACTION_NAMES.cpp_header_parsing,
+                        ACTION_NAMES.cpp_module_compile,
+                        ACTION_NAMES.cpp_module_codegen,
+                        ACTION_NAMES.preprocess_assemble,
+                        ACTION_NAMES.linkstamp_compile,
+                    ],
+                    flag_groups = [
+                        flag_group(
+                            flags = ["-fPIC"],
+                            expand_if_available = "pic",
+                        ),
+                    ],
+                ),
+            ],
+        ),
+        # Override Bazel's built-in libraries_to_link legacy feature to replace
+        # GNU ld -whole-archive/-no-whole-archive with macOS ld64 -force_load,
+        # which is the equivalent flag understood by ld64.lld.
+        feature(
+            name = "libraries_to_link",
+            enabled = True,
+            flag_sets = [
+                flag_set(
+                    actions = [
+                        ACTION_NAMES.cpp_link_executable,
+                        ACTION_NAMES.cpp_link_dynamic_library,
+                        ACTION_NAMES.cpp_link_nodeps_dynamic_library,
+                    ],
+                    flag_groups = [
+                        flag_group(
+                            iterate_over = "libraries_to_link",
+                            flag_groups = [
+                                flag_group(
+                                    flag_groups = [
+                                        flag_group(
+                                            flags = ["-Wl,-force_load,%{libraries_to_link.name}"],
+                                            expand_if_true = "libraries_to_link.is_whole_archive",
+                                        ),
+                                        flag_group(
+                                            flags = ["%{libraries_to_link.name}"],
+                                            expand_if_false = "libraries_to_link.is_whole_archive",
+                                        ),
+                                    ],
+                                    expand_if_equal = variable_with_value(
+                                        name = "libraries_to_link.type",
+                                        value = "static_library",
+                                    ),
+                                ),
+                                flag_group(
+                                    iterate_over = "libraries_to_link.object_files",
+                                    flags = ["%{libraries_to_link.object_files}"],
+                                    expand_if_equal = variable_with_value(
+                                        name = "libraries_to_link.type",
+                                        value = "object_file_group",
+                                    ),
+                                ),
+                                flag_group(
+                                    flags = ["%{libraries_to_link.name}"],
+                                    expand_if_equal = variable_with_value(
+                                        name = "libraries_to_link.type",
+                                        value = "object_file",
+                                    ),
+                                ),
+                                flag_group(
+                                    flags = ["%{libraries_to_link.name}"],
+                                    expand_if_equal = variable_with_value(
+                                        name = "libraries_to_link.type",
+                                        value = "interface_library",
+                                    ),
+                                ),
+                                flag_group(
+                                    flags = ["-l%{libraries_to_link.name}"],
+                                    expand_if_equal = variable_with_value(
+                                        name = "libraries_to_link.type",
+                                        value = "dynamic_library",
+                                    ),
+                                ),
+                                flag_group(
+                                    flags = ["%{libraries_to_link.name}"],
+                                    expand_if_equal = variable_with_value(
+                                        name = "libraries_to_link.type",
+                                        value = "versioned_dynamic_library",
+                                    ),
+                                ),
+                            ],
+                            expand_if_available = "libraries_to_link",
+                        ),
+                    ],
+                ),
+            ],
+        ),
+        feature(
+            name = "runtime_library_search_directories",
+            flag_sets = [
+                flag_set(
+                    actions = [
+                        ACTION_NAMES.cpp_link_executable,
+                        ACTION_NAMES.cpp_link_dynamic_library,
+                        ACTION_NAMES.cpp_link_nodeps_dynamic_library,
+                    ],
+                    flag_groups = [
+                        flag_group(
+                            iterate_over = "runtime_library_search_directories",
+                            flag_groups = [
+                                flag_group(
+                                    flags = [
+                                        "-Xlinker",
+                                        "-rpath",
+                                        "-Xlinker",
+                                        "@loader_path/%{runtime_library_search_directories}",
+                                    ],
+                                ),
+                            ],
+                            expand_if_available = "runtime_library_search_directories",
+                        ),
+                    ],
+                ),
+            ],
+        ),
+        feature(
+            name = "set_install_name",
+            enabled = True,
+            flag_sets = [
+                flag_set(
+                    actions = [
+                        ACTION_NAMES.cpp_link_dynamic_library,
+                        ACTION_NAMES.cpp_link_nodeps_dynamic_library,
+                    ],
+                    flag_groups = [
+                        flag_group(
+                            flags = ["-Wl,-install_name,@rpath/%{runtime_solib_name}"],
+                            expand_if_available = "runtime_solib_name",
+                        ),
+                    ],
+                ),
+            ],
+        ),
         feature(
             name = "default_compile_flags",
             enabled = True,
