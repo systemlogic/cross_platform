@@ -91,6 +91,110 @@ Linux toolchains are pinned per-build via `--extra_toolchains` in `.bazelrc` (no
 
 macOS toolchains are registered globally in `MODULE.bazel` and auto-selected by Bazel based on exec+target constraints.
 
+## Parallel Cross-Platform Testing
+
+`test_cross_platform.sh` runs builds and tests for **x86_64**, **arm64** (Linux, in Docker), and **macos_arm64** simultaneously in a 2×2 tmux grid.
+
+```bash
+./test_cross_platform.sh
+```
+
+**Requirements:** `tmux` and Docker Desktop with multi-arch / `binfmt_misc` support.
+
+**Terminal layout:**
+
+```
+┌──────────────┬──────────────┐
+│   x86_64     │   arm64      │  ← Docker containers (Linux)
+├──────────────┼──────────────┤
+│  macos_arm64 │   monitor    │  ← macOS host / status + summary
+└──────────────┴──────────────┘
+```
+
+![Parallel cross-platform build in tmux](docs/tmux_layout.png)
+
+**How it works:**
+
+- Linux builds run inside long-lived Docker containers (`cross_build_x86_64`, `cross_build_arm64`). Containers are created on first run, restarted on subsequent runs — never removed — so they are reused across invocations.
+- Bazel output caches are persisted in named Docker volumes (`cross_build_x86_64_bazel_cache`, `cross_build_arm64_bazel_cache`) that survive container restarts and Bazel version changes.
+- The macOS arm64 build runs natively on the host — no Docker.
+- x86_64 runs under QEMU emulation on Apple Silicon. Bazel JVM startup can take several minutes; a heartbeat line is printed every 30 s so the pane stays visibly alive.
+- Each arch runs `./setup.sh` first to install required host packages, then executes `./bazel test` followed by `./bazel build` for `//examples/...`.
+- Per-arch logs are written to `./build_logs/<arch>_<timestamp>.log`. A summary log is written when all three arches finish.
+
+**Container and volume names** (fixed, no timestamp — same names are reused every run):
+
+| Arch | Container | Cache volume |
+|------|-----------|--------------|
+| x86_64 | `cross_build_x86_64` | `cross_build_x86_64_bazel_cache` |
+| arm64 | `cross_build_arm64` | `cross_build_arm64_bazel_cache` |
+
+### setup.sh
+
+`setup.sh` installs required host packages before building. It is called automatically by `test_cross_platform.sh` and is safe to run multiple times (no-op if all packages are already present). Currently installs `libxml2-dev` (Linux arm64) and `curl` (all Linux).
+
+To add a new requirement, append an entry to `REQUIRED_PACKAGES` inside `setup.sh`:
+
+```bash
+"package_name:OS:arch"   # OS: Linux | Darwin | *   arch: arm64 | aarch64 | x86_64 | *
+```
+
+## Code Coverage
+
+`coverage_check.sh` measures **patch coverage** — the fraction of lines introduced by the last commit (`HEAD~1..HEAD`) that are exercised by tests — and enforces a configurable minimum threshold.
+
+```bash
+# Auto-detect platform, 75% threshold (default)
+./coverage_check.sh
+
+# Explicit platform and threshold
+./coverage_check.sh --config macos_arm64 --threshold 80
+
+# Keep the lcov report after a passing run
+./coverage_check.sh --keep-report
+```
+
+**Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--config <cfg>` | auto-detected | Bazel platform config: `x86_64`, `arm64`, `macos_arm64`, `macos_x86_64` |
+| `--threshold <pct>` | `75` | Minimum patch coverage % required per language |
+| `--keep-report` | off | Retain the lcov report even on a passing run |
+
+**Supported languages:** C/C++, Java, Go, Python. Only languages with changed files are evaluated; unsupported file types (headers-only changes, generated code) emit a warning and are skipped.
+
+**How it works:**
+
+1. Derives the diff from `git diff HEAD~1..HEAD` (last commit) — no patch file needed.
+2. Identifies which languages have changed source files.
+3. Runs `./bazel coverage --config=<cfg> --combined_report=lcov` against only the affected language targets under `//examples/...`.
+4. Parses the merged lcov report, filters to lines present in the patch, and computes per-language coverage.
+5. Exits `0` (PASS) if all languages meet the threshold, `1` (FAIL) otherwise.
+
+**Outputs:**
+
+- `coverage_reports/<timestamp>/merged_coverage.dat` — merged lcov data (deleted on PASS unless `--keep-report`).
+- `coverage_reports/<timestamp>/bazel_coverage.log` — raw Bazel output.
+
+**Running coverage for a specific language manually:**
+
+```bash
+# C/C++
+./bazel coverage --config=macos_arm64 --combined_report=lcov //examples/cc/...
+
+# Java
+./bazel coverage --config=macos_arm64 --combined_report=lcov //examples/java/...
+
+# Go
+./bazel coverage --config=macos_arm64 --combined_report=lcov //examples/go/...
+
+# Python
+./bazel coverage --config=macos_arm64 --combined_report=lcov //examples/python/...
+```
+
+The merged lcov report lands at `bazel-out/_coverage/_coverage_report.dat`.
+
 ## Architecture
 
 ### Toolchain Registration Flow (Bzlmod)
@@ -132,6 +236,9 @@ The `WORKSPACE` file is a stub — all repository and toolchain management has b
 
 | File | Purpose |
 |------|---------|
+| `test_cross_platform.sh` | Parallel build+test runner: x86_64 + arm64 (Docker) + macos_arm64 (host) in a 2×2 tmux grid |
+| `coverage_check.sh` | Patch coverage checker: runs `bazel coverage`, filters to last-commit diff lines, enforces threshold |
+| `setup.sh` | Installs required host packages before building (idempotent; called by `test_cross_platform.sh`) |
 | `toolchain_extension.bzl` | Bzlmod module extension; instantiates all external repos; loaded by `MODULE.bazel` |
 | `toolchain_repositories.bzl` | All repository rules: `toolchain_archive_repository`, `macos_sdk_repository`, GCC/LLVM/JDK/protoc/plugin wrappers, `grpc_java_maven_repositories` |
 | `external_tool/external_tool_repositories.bzl` | Legacy WORKSPACE helper (retained but not the primary path); calls a subset of repos |

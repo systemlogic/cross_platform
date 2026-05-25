@@ -4,7 +4,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 def make_reply(name: str) -> str:
     return "Hello " + name
 
-
 class GreeterHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
