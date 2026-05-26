@@ -11,6 +11,9 @@ py_binary(
     srcs = ["server.py"],
     main = "server.py",
     deps = [":server_lib"],
+    tags = [
+        "server",
+    ],
 )
 
 py_binary(

@@ -1,6 +1,5 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-
 def make_reply(name: str) -> str:
     return "Hello " + name
 

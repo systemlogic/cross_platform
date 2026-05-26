@@ -168,9 +168,10 @@ To add a new requirement, append an entry to `REQUIRED_PACKAGES` inside `setup.s
 
 1. Derives the diff from `git diff HEAD~1..HEAD` (last commit) — no patch file needed.
 2. Identifies which languages have changed source files.
-3. Runs `./bazel coverage --config=<cfg> --combined_report=lcov` against only the affected language targets under `//examples/...`.
-4. Parses the merged lcov report, filters to lines present in the patch, and computes per-language coverage.
-5. Exits `0` (PASS) if all languages meet the threshold, `1` (FAIL) otherwise.
+3. Runs `bazel query rdeps(//examples/..., set(<changed files>))` to discover precisely which targets depend on the changed files; falls back to broad `//examples/<lang>/...` globs if the query returns nothing.
+4. Runs `./bazel coverage --config=<cfg> --combined_report=lcov` on the discovered targets only.
+5. Parses the merged lcov report, filters to lines present in the patch, and computes per-language coverage.
+6. Exits `0` (PASS) if all languages meet the threshold, `1` (FAIL) otherwise.
 
 **Outputs:**
 
@@ -194,6 +195,70 @@ To add a new requirement, append an entry to `REQUIRED_PACKAGES` inside `setup.s
 ```
 
 The merged lcov report lands at `bazel-out/_coverage/_coverage_report.dat`.
+
+## Affected Server Targets
+
+`affected_server_targets.sh` identifies Bazel targets tagged `server` in `//examples/...` that are **transitively affected** by source-file changes in the last commit (`HEAD~1..HEAD`). Use it to determine which deployable service images need to be rebuilt and redeployed after a commit.
+
+```bash
+./affected_server_targets.sh
+```
+
+**How it works:**
+
+1. Collects changed source files (`*.go`, `*.py`, `*.java`, `*.cpp`, `*.c`, `*.h`) from `git diff HEAD~1..HEAD`.
+2. Runs a `bazel query` to find all targets under `//examples/...` that **transitively depend** on those files and carry the `server` tag:
+   ```
+   attr(tags, 'server', rdeps(//examples/..., set(<changed files>)))
+   ```
+3. Prints the list of affected server targets — one per line — suitable for piping into a Docker build or deployment script.
+
+**Tagging a target as deployable:**
+
+Add `tags = ["server"]` to any binary rule whose output is packaged into a Docker image. The two existing server targets in this repo illustrate the pattern:
+
+```python
+# examples/go/grpc_server/BUILD
+go_binary(
+    name = "server",
+    srcs = ["main.go"],
+    tags = ["server"],
+    ...
+)
+
+# examples/python/clientServer/BUILD
+py_binary(
+    name = "server",
+    srcs = ["server.py"],
+    tags = ["server"],
+    ...
+)
+```
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success — prints matched targets, or warns that none matched |
+| `1` | Error — fewer than 2 commits, or `bazel query` failed |
+
+If no server-tagged targets are transitively affected, the script exits `0` with a warning — this is expected for commits that only touch tests or non-server code.
+
+**Example output** (from a commit touching `examples/go/grpc_server/main.go` and `examples/python/clientServer/server_lib.py`):
+
+```
+[affected] Diff: c53c3e3..db11931  (HEAD~1..HEAD)
+[affected] Changed source files (2):
+    examples/go/grpc_server/main.go
+    examples/python/clientServer/server_lib.py
+
+[affected] Running bazel query...
+[affected]   Query: attr(tags, 'server', rdeps(//examples/..., set(examples/go/grpc_server/main.go examples/python/clientServer/server_lib.py)))
+
+[affected] Affected server targets (2):
+    //examples/go/grpc_server:server
+    //examples/python/clientServer:server
+```
 
 ## Architecture
 

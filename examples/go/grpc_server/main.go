@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-
 	"google.golang.org/grpc"
 
 	grpcservice "cross_platform/examples/go/grpc_service"
