@@ -9,4 +9,7 @@ go_binary(
         "//examples/proto:greeter_go_lib",
         "@org_golang_google_grpc//:grpc",
     ],
+    tags = [
+        "server",
+    ],
 )

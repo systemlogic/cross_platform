@@ -5,9 +5,13 @@
 # per language. Validates that patch coverage >= THRESHOLD (default 75%)
 # for every affected language; exits 0 (PASS) or 1 (FAIL).
 #
-# The diff is derived automatically from the last commit:
-#   git diff HEAD~1..HEAD
-# No patch file needs to be supplied.
+# Target discovery:
+#   1. Collects changed source files via:
+#        git diff HEAD~1..HEAD --name-only -- "*.go" "*.py" "*.java" "*.cpp" "*.c" "*.h"
+#   2. Passes them to bazel query to find all targets in //examples/... that
+#      depend on those files:
+#        ./bazel query "rdeps(//examples/..., set(<changed files>))"
+#   3. Runs bazel coverage only on those affected targets.
 #
 # Supported languages: C/C++, Java, Go, Python
 # Coverage tool: Bazel's built-in `bazel coverage` (lcov output)
@@ -83,7 +87,7 @@ if [[ -z "${BAZEL_CONFIG}" ]]; then
     log "Auto-detected Bazel config: --config=${BAZEL_CONFIG}"
 fi
 
-# ── Derive diff from last commit (HEAD~1..HEAD) ───────────────────────────────
+# ── Resolve commit range ──────────────────────────────────────────────────────
 CURRENT_BRANCH="$(git -C "${SCRIPT_DIR}" rev-parse --abbrev-ref HEAD)"
 HEAD_SHA="$(git -C "${SCRIPT_DIR}" rev-parse --short HEAD)"
 PREV_SHA="$(git -C "${SCRIPT_DIR}" rev-parse --short HEAD~1 2>/dev/null)" \
@@ -92,65 +96,70 @@ PREV_SHA="$(git -C "${SCRIPT_DIR}" rev-parse --short HEAD~1 2>/dev/null)" \
 log "Branch : ${CURRENT_BRANCH}"
 log "Diff   : ${PREV_SHA}..${HEAD_SHA}  (HEAD~1..HEAD — last commit)"
 
+# ── Collect changed source files ──────────────────────────────────────────────
+# Use --name-only for target discovery; also keep the full patch for line tracking.
 PATCH_CONTENT="$(git -C "${SCRIPT_DIR}" diff HEAD~1..HEAD)"
-
 [[ -n "${PATCH_CONTENT}" ]] || die "Diff is empty — last commit introduced no changes."
 
-# ── Parse patch → {file: sorted list of added/changed line numbers} ───────────
+# Gather only source-file paths that Bazel can trace as srcs nodes.
+mapfile -t CHANGED_SOURCE_FILES < <(
+    git -C "${SCRIPT_DIR}" diff HEAD~1..HEAD --name-only \
+        -- "*.go" "*.py" "*.java" "*.cpp" "*.c" "*.h" 2>/dev/null || true
+)
+
+if [[ ${#CHANGED_SOURCE_FILES[@]} -eq 0 ]]; then
+    warn "No supported source files changed (C/C++, Java, Go, Python). Nothing to check."
+    exit 0
+fi
+
+log "Changed source files (${#CHANGED_SOURCE_FILES[@]}):"
+for f in "${CHANGED_SOURCE_FILES[@]}"; do
+    echo "    ${f}"
+done
+
+# ── Parse patch → {file:lineno} for patch coverage computation ────────────────
 # Outputs lines of the form:  <file>:<lineno>
 parse_patch_lines() {
     local patch="$1"
-    local current_file="" new_start new_count lineno
+    local current_file="" lineno
 
     while IFS= read -r line; do
-        # New file in the patch
         if [[ "${line}" =~ ^\+\+\+\ b/(.+)$ ]]; then
             current_file="${BASH_REMATCH[1]}"
             continue
         fi
 
-        # Hunk header: @@ -old_start,old_count +new_start,new_count @@
         if [[ "${line}" =~ ^@@\ -[0-9]+(,[0-9]+)?\ \+([0-9]+)(,([0-9]+))?\ @@ ]]; then
-            new_start="${BASH_REMATCH[2]}"
-            new_count="${BASH_REMATCH[4]:-1}"
-            lineno="${new_start}"
+            lineno="${BASH_REMATCH[2]}"
             continue
         fi
 
         [[ -z "${current_file}" || -z "${lineno}" ]] && continue
 
         if [[ "${line}" =~ ^\+ && ! "${line}" =~ ^\+\+\+ ]]; then
-            # Added/changed line — record it
             echo "${current_file}:${lineno}"
             (( lineno++ )) || true
         elif [[ ! "${line}" =~ ^- ]]; then
-            # Context line — advance new-file pointer
             (( lineno++ )) || true
         fi
-        # Removed lines (^-) don't advance the new-file pointer
     done <<< "${patch}"
 }
 
-declare -A PATCH_LINES  # key="file:lineno" → 1
-declare -A PATCHED_FILES  # key=file → 1
+declare -A PATCH_LINES   # key="file:lineno" → 1
+declare -A PATCHED_FILES # key=file → 1
 
-log "Parsing patch..."
+log "Parsing patch lines..."
 while IFS= read -r entry; do
     PATCH_LINES["${entry}"]=1
     PATCHED_FILES["${entry%%:*}"]=1
 done < <(parse_patch_lines "${PATCH_CONTENT}")
 
-[[ ${#PATCHED_FILES[@]} -eq 0 ]] && die "No changed source files found in patch."
+[[ ${#PATCHED_FILES[@]} -eq 0 ]] && die "No changed source lines found in patch."
 
-log "Changed files in patch (${#PATCHED_FILES[@]}):"
-for f in "${!PATCHED_FILES[@]}"; do
-    echo "    ${f}"
-done
+# ── Classify changed files by language (for reporting) ────────────────────────
+declare -A LANG_HAS_CHANGES
 
-# ── Classify changed files by language ────────────────────────────────────────
-declare -A LANG_HAS_CHANGES  # lang → 1
-
-for f in "${!PATCHED_FILES[@]}"; do
+for f in "${CHANGED_SOURCE_FILES[@]}"; do
     case "${f}" in
         *.cc|*.cpp|*.cxx|*.c|*.h|*.hh|*.hpp) LANG_HAS_CHANGES["cc"]=1 ;;
         *.java)                                LANG_HAS_CHANGES["java"]=1 ;;
@@ -159,40 +168,52 @@ for f in "${!PATCHED_FILES[@]}"; do
     esac
 done
 
-if [[ ${#LANG_HAS_CHANGES[@]} -eq 0 ]]; then
-    warn "No supported source files changed (C/C++, Java, Go, Python). Nothing to check."
-    exit 0
-fi
-
 log "Languages with changes: ${!LANG_HAS_CHANGES[*]}"
 
-# ── Map languages to Bazel test targets ───────────────────────────────────────
-declare -A LANG_TARGETS=(
-    [cc]="//examples/cc/..."
-    [java]="//examples/java/..."
-    [go]="//examples/go/..."
-    [python]="//examples/python/..."
+# ── Discover affected Bazel targets via rdeps query ───────────────────────────
+# Build a space-separated set() of the changed workspace-relative file paths.
+FILE_SET="${CHANGED_SOURCE_FILES[*]}"
+QUERY="rdeps(//examples/..., set(${FILE_SET}))"
+
+log "Running bazel query to find affected targets..."
+log "  Query: ${QUERY}"
+
+mapfile -t AFFECTED_TARGETS < <(
+    "${BAZEL}" query "${QUERY}" --output=label 2>/dev/null \
+        | grep -v '^$' || true
 )
 
-# Build target list for only the affected languages
-COVERAGE_TARGETS=()
-for lang in "${!LANG_HAS_CHANGES[@]}"; do
-    COVERAGE_TARGETS+=("${LANG_TARGETS[${lang}]}")
+if [[ ${#AFFECTED_TARGETS[@]} -eq 0 ]]; then
+    warn "bazel query returned no targets for the changed files."
+    warn "The changed files may not be listed as srcs in any //examples/... target."
+    warn "Falling back to broad per-language targets."
+    declare -A LANG_TARGETS=(
+        [cc]="//examples/cc/..."
+        [java]="//examples/java/..."
+        [go]="//examples/go/..."
+        [python]="//examples/python/..."
+    )
+    for lang in "${!LANG_HAS_CHANGES[@]}"; do
+        AFFECTED_TARGETS+=("${LANG_TARGETS[${lang}]}")
+    done
+fi
+
+log "Affected targets (${#AFFECTED_TARGETS[@]}):"
+for t in "${AFFECTED_TARGETS[@]}"; do
+    echo "    ${t}"
 done
 
-# ── Run bazel coverage ────────────────────────────────────────────────────────
+# ── Run bazel coverage on the discovered targets ──────────────────────────────
 mkdir -p "${REPORT_DIR}"
 
-log "Running: ./bazel coverage --config=${BAZEL_CONFIG} --combined_report=lcov ${COVERAGE_TARGETS[*]}"
+log "Running: ./bazel coverage --config=${BAZEL_CONFIG} --combined_report=lcov ${AFFECTED_TARGETS[*]}"
 echo ""
 
-# Bazel writes the merged lcov report to bazel-out/_coverage/_coverage_report.dat
-# We capture it after the run.
 "${BAZEL}" coverage \
     --config="${BAZEL_CONFIG}" \
     --combined_report=lcov \
     --instrument_test_targets \
-    -- "${COVERAGE_TARGETS[@]}" \
+    -- "${AFFECTED_TARGETS[@]}" \
     2>&1 | tee "${REPORT_DIR}/bazel_coverage.log" || {
         echo ""
         die "bazel coverage failed — see ${REPORT_DIR}/bazel_coverage.log"
@@ -203,7 +224,6 @@ echo ""
 # Locate the merged lcov report Bazel produced
 BAZEL_COVERAGE_DAT="${SCRIPT_DIR}/bazel-out/_coverage/_coverage_report.dat"
 if [[ ! -f "${BAZEL_COVERAGE_DAT}" ]]; then
-    # Fall back: aggregate per-test coverage.dat files
     log "Merged report not found at expected path; aggregating per-test reports..."
     > "${LCOV_MERGED}"
     find "${SCRIPT_DIR}/bazel-testlogs" -name "coverage.dat" 2>/dev/null | while read -r dat; do
@@ -217,16 +237,8 @@ cp "${BAZEL_COVERAGE_DAT}" "${LCOV_MERGED}"
 log "Coverage data: ${LCOV_MERGED}"
 
 # ── Parse lcov report filtered to patch lines ─────────────────────────────────
-# lcov format:
-#   SF:<source file>
-#   DA:<line>,<hit-count>
-#   LF:<total instrumented lines>
-#   LH:<lines hit>
-#   end_of_record
-
 compute_patch_coverage() {
     local lcov_file="$1"
-    # Outputs: lang covered total
     local current_sf="" lang
     declare -A lang_covered lang_total
 
@@ -238,10 +250,8 @@ compute_patch_coverage() {
     while IFS= read -r line; do
         if [[ "${line}" =~ ^SF:(.+)$ ]]; then
             current_sf="${BASH_REMATCH[1]}"
-            # Normalise: strip leading workspace path or external/ prefix
-            current_sf="${current_sf#*/_main/}"    # strip Bazel's sandbox prefix
-            current_sf="${current_sf#*/execroot/}" # strip execroot prefix
-            # Keep only the part after the module root (heuristic: trim up to /examples/)
+            current_sf="${current_sf#*/_main/}"
+            current_sf="${current_sf#*/execroot/}"
             current_sf="${current_sf##*/cross_platform/}"
             continue
         fi
@@ -258,10 +268,8 @@ compute_patch_coverage() {
             local hits="${BASH_REMATCH[2]}"
             local key="${current_sf}:${lineno}"
 
-            # Only count lines that appear in the patch
             [[ "${PATCH_LINES[${key}]+set}" ]] || continue
 
-            # Determine language from file extension
             case "${current_sf}" in
                 *.cc|*.cpp|*.cxx|*.c|*.h|*.hh|*.hpp) lang="cc" ;;
                 *.java) lang="java" ;;
@@ -308,7 +316,6 @@ echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━�
 OVERALL_STATUS=0
 
 for lang in cc java go python; do
-    # Only report languages that had changes in the patch
     [[ "${LANG_HAS_CHANGES[${lang}]+set}" ]] || continue
 
     label="${LANG_LABELS[$lang]}"
@@ -317,8 +324,6 @@ for lang in cc java go python; do
     pct="${PCT[$lang]}"
 
     if [[ "${tot}" -eq 0 ]]; then
-        # The language had changed files but none were instrumented
-        # (e.g. only header changes, or coverage not available for this target)
         warn "  ${label}: no instrumented patch lines found in coverage data."
         warn "         Changed files may be headers, generated code, or excluded from coverage."
         continue
@@ -331,8 +336,8 @@ for lang in cc java go python; do
         OVERALL_STATUS=1
     fi
 
-    printf "  %-10s  %3d%% coverage  (%d / %d patch lines covered)  %b\n" \
-        "${label}" "${pct}" "${cov}" "${tot}" "${status_str}"
+    printf "  %-10s  %3d%% / %d%%  (%d / %d patch lines covered)  %b\n" \
+        "${label}" "${pct}" "${THRESHOLD}" "${cov}" "${tot}" "${status_str}"
 done
 
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
