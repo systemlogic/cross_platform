@@ -1,7 +1,3 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Bazel Version Management
 
 The required Bazel version is pinned in **`.bazelversion`** (currently `9.0.1`).
