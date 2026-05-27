@@ -1,0 +1,35 @@
+load("//python:defs.bzl", "py_self_executable")
+
+# Build with:
+#   ./bazel build --config=macos_arm64 //examples/AI/matrix_multiplication:matrix_multiplication
+#
+# Run with:
+#   ./bazel-bin/examples/AI/matrix_multiplication/matrix_multiplication
+
+py_self_executable(
+    name = "matrix_multiplication",
+    main = "main.py",
+    srcs = ["main.py"],
+    deps = [
+        # Primary packages
+        "@pip_torch//:pkg",
+        "@pip_torchvision//:pkg",
+        # torch pure-Python dependencies
+        "@pip_filelock//:pkg",
+        "@pip_fsspec//:pkg",
+        "@pip_jinja2//:pkg",
+        "@pip_markupsafe//:pkg",
+        "@pip_networkx//:pkg",
+        "@pip_setuptools//:pkg",
+        "@pip_mpmath//:pkg",
+        "@pip_sympy//:pkg",
+        "@pip_typing_extensions//:pkg",
+        # torchvision dependencies
+        "@pip_numpy//:pkg",
+        "@pip_pillow//:pkg",
+    ],
+    target_compatible_with = [
+        "@platforms//os:macos",
+        "@platforms//cpu:arm64",
+    ],
+)
