@@ -24,7 +24,7 @@ def main() -> None:
         print("MPS not available — this benchmark requires Apple Silicon with MPS support.")
         return
 
-    matrix_size = 64 * 256
+    matrix_size = 128 * 256
     x = torch.randn(matrix_size, matrix_size)
     y = torch.randn(matrix_size, matrix_size)
 
