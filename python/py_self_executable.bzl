@@ -32,10 +32,13 @@ def _py_self_executable_impl(ctx):
 
     src_files = ctx.files.srcs + ctx.files.data
 
-    # Each dep is a :pkg filegroup from pip_wheel_repository.
-    pip_files = []
-    for dep in ctx.attr.deps:
-        pip_files.extend(dep.files.to_list())
+    # Each dep is a :pkg py_library from pip_wheel_repository.
+    # Collect srcs (files) AND data (default_runfiles) so binary wheels
+    # with .so extension modules are fully declared as action inputs.
+    pip_files_depset = depset(transitive =
+        [dep.files for dep in ctx.attr.deps] +
+        [dep[DefaultInfo].default_runfiles.files for dep in ctx.attr.deps])
+    pip_files = pip_files_depset.to_list()
 
     # Determine unique pip repo roots (external/<repo>) from pip file paths.
     pip_dirs = {}
@@ -51,8 +54,8 @@ def _py_self_executable_impl(ctx):
     strip_prefixes.extend(ctx.attr.strip_src_prefixes)
 
     all_inputs = depset(
-        direct = [ctx.file._builder, ctx.file._bootstrap] + src_files + pip_files,
-        transitive = [py_runtime.runtime_files],
+        direct = [ctx.file._builder, ctx.file._bootstrap] + src_files,
+        transitive = [py_runtime.runtime_files, pip_files_depset],
     )
 
     args = ctx.actions.args()
@@ -98,7 +101,7 @@ py_self_executable = rule(
         ),
         "deps": attr.label_list(
             allow_files = False,
-            doc = "Pip wheel filegroup targets to merge into Python's site-packages.",
+            doc = "Pip wheel py_library targets to merge into Python's site-packages.",
         ),
         "strip_src_prefixes": attr.string_list(
             default = [],

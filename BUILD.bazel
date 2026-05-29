@@ -505,6 +505,31 @@ toolchain(
     toolchain_type = "@bazel_tools//tools/jdk:runtime_toolchain_type",
 )
 
+# config_setting targets for select() in py_runnable deps
+config_setting(
+    name = "is_macos_arm64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:arm64",
+    ],
+)
+
+config_setting(
+    name = "is_linux_arm64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:arm64",
+    ],
+)
+
+config_setting(
+    name = "is_linux_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
 # macOS platform targets
 platform(
     name = "macos_arm64_platform",

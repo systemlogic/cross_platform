@@ -24,9 +24,13 @@ requests/, requests-2.32.3.dist-info/).
 """
 
 _BUILD_CONTENT = """\
-filegroup(
+load("@rules_python//python:defs.bzl", "py_library")
+
+py_library(
     name = "pkg",
-    srcs = glob(["**"]),
+    srcs = glob(["**/*.py"]),
+    data = glob(["**"], exclude = ["BUILD.bazel", "**/*.py"]),
+    imports = ["."],
     visibility = ["//visibility:public"],
 )
 """
