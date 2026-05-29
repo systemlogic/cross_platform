@@ -1,4 +1,4 @@
-load("//python:defs.bzl", "py_runnable")
+load("@rules_python//python:defs.bzl", "py_binary")
 
 # Build with:
 #   ./bazel build --config=macos_arm64 //examples/AI/heart_disease:heart_disease
@@ -9,7 +9,7 @@ load("//python:defs.bzl", "py_runnable")
 # Run with a custom CSV or device:
 #   ./bazel run --config=macos_arm64 //examples/AI/heart_disease:heart_disease -- --device cpu --data /path/to/data.csv
 
-py_runnable(
+py_binary(
     name = "heart_disease",
     main = "main.py",
     srcs = ["main.py"],

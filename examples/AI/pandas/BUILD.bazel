@@ -1,0 +1,42 @@
+load("@rules_python//python:defs.bzl", "py_binary")
+
+# Build with:
+#   ./bazel build --config=macos_arm64 //examples/AI/pandas:pandas_example
+#   ./bazel build --config=arm64       //examples/AI/pandas:pandas_example
+#   ./bazel build --config=x86_64      //examples/AI/pandas:pandas_example
+#
+# Run with:
+#   ./bazel run --config=macos_arm64 //examples/AI/pandas:pandas_example
+#   ./bazel run --config=arm64       //examples/AI/pandas:pandas_example
+#   ./bazel run --config=x86_64      //examples/AI/pandas:pandas_example
+
+py_binary(
+    name = "pandas_example",
+    main = "main.py",
+    srcs = ["main.py"],
+    deps = [
+        # Pure-Python deps — same wheel on all platforms
+        "@pip_python_dateutil//:pkg",
+        "@pip_pytz//:pkg",
+        "@pip_six//:pkg",
+    ] + select({
+        "//:is_macos_arm64": [
+            "@pip_pandas//:pkg",
+            "@pip_numpy//:pkg",
+            "@pip_pyarrow//:pkg",
+            "@pip_fastparquet//:pkg",
+        ],
+        "//:is_linux_arm64": [
+            "@pip_pandas_linux_arm64//:pkg",
+            "@pip_numpy_linux_arm64//:pkg",
+            "@pip_pyarrow_linux_arm64//:pkg",
+            "@pip_fastparquet_linux_arm64//:pkg",
+        ],
+        "//:is_linux_x86_64": [
+            "@pip_pandas_linux_x86_64//:pkg",
+            "@pip_numpy_linux_x86_64//:pkg",
+            "@pip_pyarrow_linux_x86_64//:pkg",
+            "@pip_fastparquet_linux_x86_64//:pkg",
+        ],
+    }),
+)

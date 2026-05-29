@@ -1,4 +1,4 @@
-load("//python:defs.bzl", "py_runnable")
+load("@rules_python//python:defs.bzl", "py_binary")
 
 # Build with:
 #   ./bazel build --config=macos_arm64 //examples/AI/matrix_multiplication:matrix_multiplication
@@ -6,7 +6,7 @@ load("//python:defs.bzl", "py_runnable")
 # Run with:
 #   ./bazel run --config=macos_arm64 //examples/AI/matrix_multiplication:matrix_multiplication
 
-py_runnable(
+py_binary(
     name = "matrix_multiplication",
     main = "main.py",
     srcs = ["main.py"],
