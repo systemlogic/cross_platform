@@ -13,7 +13,6 @@ and will take some time in first run to download a file.
 ## profiler on python code
 ```
 %%cudf.pandas.line_profile
-```
                                              Total time elapsed: 6.601 seconds
 
                                                            Stats
@@ -88,3 +87,5 @@ and will take some time in first run to download a file.
 │ 49       │     time.time() - start                                                  │             │             │
 │          │                                                                          │             │             │
 └──────────┴──────────────────────────────────────────────────────────────────────────┴─────────────┴─────────────┘
+
+```
