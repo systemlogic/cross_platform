@@ -238,10 +238,14 @@ if ! docker info &>/dev/null 2>&1; then
     exit 1
 fi
 
-# ── Pull image for each required platform (Docker skips layers already cached) ─
+# ── Pull image for each required platform only if not already present locally ──
 for platform in linux/amd64 linux/arm64; do
-    echo "Pulling ${DOCKER_IMAGE} for ${platform}..."
-    docker pull --platform "$platform" "$DOCKER_IMAGE"
+    if docker run --rm --pull never --platform "$platform" "$DOCKER_IMAGE" true >/dev/null 2>&1; then
+        echo "Image ${DOCKER_IMAGE} for ${platform} already present — skipping pull."
+    else
+        echo "Pulling ${DOCKER_IMAGE} for ${platform}..."
+        docker pull --platform "$platform" "$DOCKER_IMAGE"
+    fi
 done
 
 echo ""
