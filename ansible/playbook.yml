@@ -1,0 +1,348 @@
+---
+# playbook.yml — Cross-platform checks for the Bazel cross-platform workspace.
+#
+# Play 1 — PARALLEL checks  (async / poll: 0 pattern)
+#   All tasks are fired with poll:0 so they run concurrently.
+#   A second "collect" wave waits for results via async_status.
+#   Covers: disk, memory, git, docker, network, python/go/java/compiler.
+#
+# Play 2 — SEQUENTIAL Bazel checks  (tasks run one after the other)
+#   Bazel holds a workspace lock; concurrent invocations would block or fail.
+#   Covers: bazel info → version → query → build CC/Python/Go/Java.
+#
+# Extra vars required (supplied by run_checks.sh):
+#   project_dir   absolute path to the workspace root
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PLAY 1 — PARALLEL environment / toolchain checks
+# ─────────────────────────────────────────────────────────────────────────────
+- name: "PARALLEL — Environment & Toolchain Checks"
+  hosts: local
+  connection: local
+  gather_facts: true
+  vars:
+    async_timeout: 120      # max seconds each background task may run
+    async_retries: 40       # how many times async_status will poll
+    async_delay: 3          # seconds between polls
+
+  tasks:
+
+    # ── LAUNCH PHASE: fire all tasks with poll:0 (non-blocking) ─────────────
+
+    - name: "[LAUNCH] Disk space"
+      ansible.builtin.shell: df -h "{{ project_dir }}"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_disk
+
+    - name: "[LAUNCH] Git status"
+      ansible.builtin.shell: git -C "{{ project_dir }}" status --short --branch
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_git
+
+    - name: "[LAUNCH] Python3 version"
+      ansible.builtin.shell: python3 --version 2>&1 || echo "NOT FOUND"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_python
+
+    - name: "[LAUNCH] Go version"
+      ansible.builtin.shell: go version 2>&1 || echo "NOT FOUND"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_go
+
+    - name: "[LAUNCH] Java version"
+      ansible.builtin.shell: java -version 2>&1 || echo "NOT FOUND"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_java
+
+    - name: "[LAUNCH] Clang version (macOS)"
+      ansible.builtin.shell: clang --version 2>&1 | head -1 || echo "NOT FOUND"
+      when: ansible_system == "Darwin"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_cc_mac
+
+    - name: "[LAUNCH] GCC version (Linux)"
+      ansible.builtin.shell: gcc --version 2>&1 | head -1 || echo "NOT FOUND"
+      when: ansible_system == "Linux"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_cc_linux
+
+    - name: "[LAUNCH] Docker status"
+      ansible.builtin.shell: >
+        docker info --format {% raw %}'Docker Engine {{.ServerVersion}}'{% endraw %} 2>&1
+        || echo "NOT RUNNING"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_docker
+
+    - name: "[LAUNCH] Network connectivity"
+      ansible.builtin.shell: >
+        ping {{ '-c 1 -W 1000' if ansible_system == 'Darwin' else '-c 1 -W 1' }}
+        8.8.8.8 > /dev/null 2>&1 && echo "ONLINE" || echo "OFFLINE"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_network
+
+    - name: "[LAUNCH] Memory info (Linux)"
+      ansible.builtin.shell: free -h 2>&1 | grep -E '^Mem'
+      when: ansible_system == "Linux"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_mem_linux
+
+    - name: "[LAUNCH] Memory info (macOS)"
+      ansible.builtin.shell: >
+        sysctl hw.memsize 2>/dev/null
+        | awk '{printf "Total RAM: %.0f GB", $2/1073741824}'
+      when: ansible_system == "Darwin"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_mem_mac
+
+    - name: "[LAUNCH] CPU info (Linux)"
+      ansible.builtin.shell: >
+        nproc 2>/dev/null
+        | awk '{printf "CPUs: %s", $1}'
+      when: ansible_system == "Linux"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_cpu_linux
+
+    - name: "[LAUNCH] CPU info (macOS)"
+      ansible.builtin.shell: >
+        sysctl -n hw.logicalcpu 2>/dev/null
+        | awk '{printf "CPUs: %s", $1}'
+      when: ansible_system == "Darwin"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_cpu_mac
+
+    - name: "[LAUNCH] Read .bazelversion"
+      ansible.builtin.shell: cat "{{ project_dir }}/.bazelversion"
+      async: "{{ async_timeout }}"
+      poll: 0
+      register: async_bazelver
+
+    # ── COLLECT PHASE: wait for each background job in turn ─────────────────
+
+    - name: "[COLLECT] Disk space"
+      ansible.builtin.async_status:
+        jid: "{{ async_disk.ansible_job_id }}"
+      register: result_disk
+      until: result_disk.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] Git status"
+      ansible.builtin.async_status:
+        jid: "{{ async_git.ansible_job_id }}"
+      register: result_git
+      until: result_git.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] Python3 version"
+      ansible.builtin.async_status:
+        jid: "{{ async_python.ansible_job_id }}"
+      register: result_python
+      until: result_python.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] Go version"
+      ansible.builtin.async_status:
+        jid: "{{ async_go.ansible_job_id }}"
+      register: result_go
+      until: result_go.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] Java version"
+      ansible.builtin.async_status:
+        jid: "{{ async_java.ansible_job_id }}"
+      register: result_java
+      until: result_java.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] Clang version (macOS)"
+      ansible.builtin.async_status:
+        jid: "{{ async_cc_mac.ansible_job_id }}"
+      when: ansible_system == "Darwin"
+      register: result_cc_mac
+      until: result_cc_mac.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] GCC version (Linux)"
+      ansible.builtin.async_status:
+        jid: "{{ async_cc_linux.ansible_job_id }}"
+      when: ansible_system == "Linux"
+      register: result_cc_linux
+      until: result_cc_linux.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] Docker status"
+      ansible.builtin.async_status:
+        jid: "{{ async_docker.ansible_job_id }}"
+      register: result_docker
+      until: result_docker.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] Network connectivity"
+      ansible.builtin.async_status:
+        jid: "{{ async_network.ansible_job_id }}"
+      register: result_network
+      until: result_network.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] Memory info (Linux)"
+      ansible.builtin.async_status:
+        jid: "{{ async_mem_linux.ansible_job_id }}"
+      when: ansible_system == "Linux"
+      register: result_mem_linux
+      until: result_mem_linux.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] Memory info (macOS)"
+      ansible.builtin.async_status:
+        jid: "{{ async_mem_mac.ansible_job_id }}"
+      when: ansible_system == "Darwin"
+      register: result_mem_mac
+      until: result_mem_mac.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] CPU info (Linux)"
+      ansible.builtin.async_status:
+        jid: "{{ async_cpu_linux.ansible_job_id }}"
+      when: ansible_system == "Linux"
+      register: result_cpu_linux
+      until: result_cpu_linux.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] CPU info (macOS)"
+      ansible.builtin.async_status:
+        jid: "{{ async_cpu_mac.ansible_job_id }}"
+      when: ansible_system == "Darwin"
+      register: result_cpu_mac
+      until: result_cpu_mac.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    - name: "[COLLECT] .bazelversion"
+      ansible.builtin.async_status:
+        jid: "{{ async_bazelver.ansible_job_id }}"
+      register: result_bazelver
+      until: result_bazelver.finished
+      retries: "{{ async_retries }}"
+      delay: "{{ async_delay }}"
+
+    # ── REPORT ───────────────────────────────────────────────────────────────
+
+    - name: "SUMMARY — Parallel Checks"
+      ansible.builtin.debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════════╗
+          ║            PARALLEL CHECKS  —  RESULTS                      ║
+          ╠══════════════════════════════════════════════════════════════╣
+          ║ OS/Arch    : {{ ansible_system }} / {{ ansible_architecture }}
+          ║ Disk       : {{ result_disk.stdout_lines | first | default('N/A') }}
+          ║ Memory     : {{ (result_mem_linux.stdout | default('N/A') | trim) if ansible_system == 'Linux' else (result_mem_mac.stdout | default('N/A') | trim) }}
+          ║ CPU        : {{ (result_cpu_linux.stdout | default('N/A') | trim) if ansible_system == 'Linux' else (result_cpu_mac.stdout | default('N/A') | trim) }}
+          ║ Network    : {{ result_network.stdout | default('N/A') | trim }}
+          ║ Git        : {{ result_git.stdout_lines | default([]) | join(' | ') or '(clean)' }}
+          ║ Python3    : {{ result_python.stdout | default('N/A') | trim }}
+          ║ Go         : {{ result_go.stdout | default('N/A') | trim }}
+          ║ Java       : {{ result_java.stdout | default('N/A') | trim }}
+          ║ Compiler   : {{ (result_cc_mac.stdout | default('N/A') | trim) if ansible_system == 'Darwin' else (result_cc_linux.stdout | default('N/A') | trim) }}
+          ║ Docker     : {{ result_docker.stdout | default('N/A') | trim }}
+          ║ .bazelver  : {{ result_bazelver.stdout | default('N/A') | trim }}
+          ╚══════════════════════════════════════════════════════════════╝
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PLAY 2 — SEQUENTIAL Bazel checks
+#
+# Bazel holds a workspace lock — all invocations must be strictly sequential.
+# Each task must complete before the next starts (default Ansible behaviour,
+# no async / poll here).
+# ─────────────────────────────────────────────────────────────────────────────
+- name: "SEQUENTIAL — Bazel Workspace Checks"
+  hosts: local
+  connection: local
+  gather_facts: false
+  vars:
+    bazel_cmd: "{{ project_dir }}/bazel"
+
+  tasks:
+
+    - name: "[SEQ 1/7] bazel info — workspace metadata"
+      ansible.builtin.shell: "{{ bazel_cmd }} info 2>&1"
+      args:
+        chdir: "{{ project_dir }}"
+      register: bazel_info
+
+    - name: "[SEQ 2/7] bazel version — confirm downloaded version"
+      ansible.builtin.shell: "{{ bazel_cmd }} version 2>&1"
+      args:
+        chdir: "{{ project_dir }}"
+      register: bazel_version
+
+    - name: "[SEQ 3/7] bazel query — enumerate all targets"
+      ansible.builtin.shell: "{{ bazel_cmd }} query //... 2>&1"
+      args:
+        chdir: "{{ project_dir }}"
+      register: bazel_query
+
+    - name: "[SEQ 4/7] bazel build — CC examples"
+      ansible.builtin.shell: "{{ bazel_cmd }} build //examples/cc/... 2>&1"
+      args:
+        chdir: "{{ project_dir }}"
+      register: bazel_build_cc
+
+    - name: "[SEQ 5/7] bazel build — Python examples"
+      ansible.builtin.shell: "{{ bazel_cmd }} build //examples/python/... 2>&1"
+      args:
+        chdir: "{{ project_dir }}"
+      register: bazel_build_py
+
+    - name: "[SEQ 6/7] bazel build — Go examples"
+      ansible.builtin.shell: "{{ bazel_cmd }} build //examples/go/... 2>&1"
+      args:
+        chdir: "{{ project_dir }}"
+      register: bazel_build_go
+
+    - name: "[SEQ 7/7] bazel build — Java examples"
+      ansible.builtin.shell: "{{ bazel_cmd }} build //examples/java/... 2>&1"
+      args:
+        chdir: "{{ project_dir }}"
+      register: bazel_build_java
+
+    # ── REPORT ───────────────────────────────────────────────────────────────
+
+    - name: "SUMMARY — Sequential Bazel Checks"
+      ansible.builtin.debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════════╗
+          ║         SEQUENTIAL BAZEL CHECKS  —  RESULTS                 ║
+          ╠══════════════════════════════════════════════════════════════╣
+          ║ [1] bazel info    : {{ 'OK' if bazel_info.rc    == 0 else 'FAILED' }}
+          ║ [2] bazel version : {{ bazel_version.stdout_lines | select('search', 'Build label') | first | default('N/A') }}
+          ║ [3] bazel query   : {{ bazel_query.stdout_lines | length }} target(s) found
+          ║ [4] CC build      : {{ 'OK' if bazel_build_cc.rc  == 0 else 'FAILED' }}
+          ║ [5] Python build  : {{ 'OK' if bazel_build_py.rc  == 0 else 'FAILED' }}
+          ║ [6] Go build      : {{ 'OK' if bazel_build_go.rc  == 0 else 'FAILED' }}
+          ║ [7] Java build    : {{ 'OK' if bazel_build_java.rc == 0 else 'FAILED' }}
+          ╚══════════════════════════════════════════════════════════════╝
