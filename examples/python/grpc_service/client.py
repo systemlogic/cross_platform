@@ -5,7 +5,7 @@ import grpc
 import greeter_pb2
 import greeter_pb2_grpc
 
-_DEFAULT_HOST = "192.168.1.10"
+_DEFAULT_HOST = "0.0.0.0"
 _DEFAULT_PORT = 50051
 
 
