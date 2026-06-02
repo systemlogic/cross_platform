@@ -1,0 +1,486 @@
+"""License declarations for all known external dependencies in this repo.
+
+Usage from any BUILD file:
+
+  load("//license:report.bzl", "license_report")
+
+  license_report(
+      name = "my_artifact_licenses",
+      target = "//path/to:target",
+      artifact_name = "My Artifact",
+      deps_licenses = [
+          "//license:java_grpc_deps",   # if your artifact uses Java gRPC
+          "//license:go_grpc_deps",     # if your artifact uses Go gRPC
+          "//license:python_requests",  # if your artifact uses requests
+          # …pick the relevant sets below
+      ],
+  )
+
+  # Build:  bazel build //path/to:my_artifact_licenses
+  # Read:   cat bazel-bin/path/to/my_artifact_licenses_license_report.txt
+"""
+
+load("//license:defs.bzl", "license_declaration")
+load("//license:report.bzl", "license_set")
+
+package(default_visibility = ["//visibility:public"])
+
+# =============================================================================
+# First-party project license
+# =============================================================================
+
+license_declaration(
+    name = "project_license",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2024, cross_platform contributors",
+    package_name = "cross_platform (this project)",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+# =============================================================================
+# Java gRPC runtime dependencies  (gRPC-Java 1.68.x, Protobuf-Java 4.29.x)
+# =============================================================================
+
+license_declaration(
+    name = "grpc_java_api",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2014, Google Inc.",
+    package_name = "grpc-java / grpc-api",
+    package_version = "1.68.1",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "grpc_java_context",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2014, Google Inc.",
+    package_name = "grpc-java / grpc-context",
+    package_version = "1.68.1",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "grpc_java_core",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2014, Google Inc.",
+    package_name = "grpc-java / grpc-core",
+    package_version = "1.68.1",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "grpc_java_netty_shaded",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2014, Google Inc.",
+    package_name = "grpc-java / grpc-netty-shaded",
+    package_version = "1.68.1",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "grpc_java_protobuf",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2014, Google Inc.",
+    package_name = "grpc-java / grpc-protobuf",
+    package_version = "1.68.1",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "grpc_java_protobuf_lite",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2014, Google Inc.",
+    package_name = "grpc-java / grpc-protobuf-lite",
+    package_version = "1.68.1",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "grpc_java_stub",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2014, Google Inc.",
+    package_name = "grpc-java / grpc-stub",
+    package_version = "1.68.1",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "protobuf_java",
+    spdx_id = "BSD-3-Clause",
+    copyright = "Copyright 2008, Google Inc.",
+    package_name = "protobuf-java",
+    package_version = "4.29.3",
+    url = "https://github.com/protocolbuffers/protobuf/blob/main/LICENSE",
+)
+
+license_declaration(
+    name = "guava",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2007, Google Inc.",
+    package_name = "Guava",
+    package_version = "33.3.1-jre",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "failureaccess",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2018, Google Inc.",
+    package_name = "failureaccess (Guava)",
+    package_version = "1.0.2",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "error_prone_annotations",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2015, Google Inc.",
+    package_name = "error_prone_annotations",
+    package_version = "2.28.0",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "perfmark_api",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2019, Google Inc.",
+    package_name = "perfmark-api",
+    package_version = "0.27.0",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "javax_annotation_api",
+    spdx_id = "CDDL-1.0",
+    copyright = "Copyright 2003, Sun Microsystems / Oracle.",
+    package_name = "javax.annotation-api",
+    package_version = "1.3.2",
+    url = "https://opensource.org/licenses/CDDL-1.0",
+)
+
+# Convenience set: all Maven JARs used by the Java gRPC examples
+license_set(
+    name = "java_grpc_deps",
+    licenses = [
+        ":error_prone_annotations",
+        ":failureaccess",
+        ":grpc_java_api",
+        ":grpc_java_context",
+        ":grpc_java_core",
+        ":grpc_java_netty_shaded",
+        ":grpc_java_protobuf",
+        ":grpc_java_protobuf_lite",
+        ":grpc_java_stub",
+        ":guava",
+        ":javax_annotation_api",
+        ":perfmark_api",
+        ":protobuf_java",
+    ],
+)
+
+# =============================================================================
+# Go gRPC dependencies
+# =============================================================================
+
+license_declaration(
+    name = "golang_grpc",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2014, Google Inc.",
+    package_name = "google.golang.org/grpc",
+    package_version = "v1.71.0",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "golang_protobuf",
+    spdx_id = "BSD-3-Clause",
+    copyright = "Copyright 2018, The Go Authors.",
+    package_name = "google.golang.org/protobuf",
+    package_version = "v1.36.10",
+    url = "https://github.com/protocolbuffers/protobuf-go/blob/master/LICENSE",
+)
+
+license_set(
+    name = "go_grpc_deps",
+    licenses = [
+        ":golang_grpc",
+        ":golang_protobuf",
+    ],
+)
+
+# =============================================================================
+# Python packages — HTTP / networking
+# =============================================================================
+
+license_declaration(
+    name = "py_requests",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2019, Kenneth Reitz.",
+    package_name = "requests",
+    package_version = "2.32.3",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "py_urllib3",
+    spdx_id = "MIT",
+    copyright = "Copyright 2008-2020, Andrey Petrov and contributors.",
+    package_name = "urllib3",
+    package_version = "2.2.3",
+    url = "https://opensource.org/licenses/MIT",
+)
+
+license_declaration(
+    name = "py_certifi",
+    spdx_id = "MPL-2.0",
+    copyright = "Copyright 2022, Kenneth Reitz.",
+    package_name = "certifi",
+    package_version = "2024.8.30",
+    url = "https://www.mozilla.org/en-US/MPL/2.0/",
+)
+
+license_declaration(
+    name = "py_charset_normalizer",
+    spdx_id = "MIT",
+    copyright = "Copyright 2019, Ahmed R. TAHRI.",
+    package_name = "charset-normalizer",
+    package_version = "3.4.0",
+    url = "https://opensource.org/licenses/MIT",
+)
+
+license_declaration(
+    name = "py_idna",
+    spdx_id = "BSD-3-Clause",
+    copyright = "Copyright 2013-2024, Kim Davies and contributors.",
+    package_name = "idna",
+    package_version = "3.10",
+    url = "https://opensource.org/licenses/BSD-3-Clause",
+)
+
+license_set(
+    name = "python_requests",
+    licenses = [
+        ":py_certifi",
+        ":py_charset_normalizer",
+        ":py_idna",
+        ":py_requests",
+        ":py_urllib3",
+    ],
+)
+
+# =============================================================================
+# Python packages — ML / numeric
+# =============================================================================
+
+license_declaration(
+    name = "py_torch",
+    spdx_id = "BSD-3-Clause",
+    copyright = "Copyright 2016, Facebook Inc.",
+    package_name = "PyTorch (torch)",
+    package_version = "2.7.0",
+    url = "https://github.com/pytorch/pytorch/blob/main/LICENSE",
+)
+
+license_declaration(
+    name = "py_torchvision",
+    spdx_id = "BSD-3-Clause",
+    copyright = "Copyright 2016, Soumith Chintala.",
+    package_name = "torchvision",
+    package_version = "0.22.0",
+    url = "https://github.com/pytorch/vision/blob/main/LICENSE",
+)
+
+license_declaration(
+    name = "py_numpy",
+    spdx_id = "BSD-3-Clause",
+    copyright = "Copyright 2005-2024, NumPy Developers.",
+    package_name = "NumPy",
+    package_version = "2.4.6",
+    url = "https://opensource.org/licenses/BSD-3-Clause",
+)
+
+license_declaration(
+    name = "py_pillow",
+    spdx_id = "HPND",
+    copyright = "Copyright 1997-2011, Secret Labs AB / 2010-2024, Alex Clark and contributors.",
+    package_name = "Pillow",
+    package_version = "12.2.0",
+    url = "https://raw.githubusercontent.com/python-pillow/Pillow/main/LICENSE",
+)
+
+license_declaration(
+    name = "py_filelock",
+    spdx_id = "Unlicense",
+    copyright = "Copyright 2015, Benedikt Schmitt.",
+    package_name = "filelock",
+    package_version = "3.29.0",
+    url = "https://unlicense.org",
+)
+
+license_declaration(
+    name = "py_fsspec",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2018, Martin Durant.",
+    package_name = "fsspec",
+    package_version = "2026.4.0",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "py_jinja2",
+    spdx_id = "BSD-3-Clause",
+    copyright = "Copyright 2007, Pallets.",
+    package_name = "Jinja2",
+    package_version = "3.1.6",
+    url = "https://opensource.org/licenses/BSD-3-Clause",
+)
+
+license_declaration(
+    name = "py_markupsafe",
+    spdx_id = "BSD-3-Clause",
+    copyright = "Copyright 2010, Pallets.",
+    package_name = "MarkupSafe",
+    package_version = "3.0.3",
+    url = "https://opensource.org/licenses/BSD-3-Clause",
+)
+
+license_declaration(
+    name = "py_mpmath",
+    spdx_id = "BSD-3-Clause",
+    copyright = "Copyright 2007, Fredrik Johansson.",
+    package_name = "mpmath",
+    package_version = "1.4.1",
+    url = "https://opensource.org/licenses/BSD-3-Clause",
+)
+
+license_declaration(
+    name = "py_networkx",
+    spdx_id = "BSD-3-Clause",
+    copyright = "Copyright 2004-2024, NetworkX Developers.",
+    package_name = "NetworkX",
+    package_version = "3.6.1",
+    url = "https://opensource.org/licenses/BSD-3-Clause",
+)
+
+license_declaration(
+    name = "py_setuptools",
+    spdx_id = "MIT",
+    copyright = "Copyright Jason R. Coombs.",
+    package_name = "setuptools",
+    package_version = "82.0.1",
+    url = "https://opensource.org/licenses/MIT",
+)
+
+license_declaration(
+    name = "py_sympy",
+    spdx_id = "BSD-3-Clause",
+    copyright = "Copyright 2006-2024, SymPy Development Team.",
+    package_name = "SymPy",
+    package_version = "1.14.0",
+    url = "https://opensource.org/licenses/BSD-3-Clause",
+)
+
+license_declaration(
+    name = "py_typing_extensions",
+    spdx_id = "PSF-2.0",
+    copyright = "Copyright 2001-2024, Python Software Foundation.",
+    package_name = "typing_extensions",
+    package_version = "4.15.0",
+    url = "https://opensource.org/licenses/Python-2.0",
+)
+
+license_set(
+    name = "python_torch_deps",
+    licenses = [
+        ":py_filelock",
+        ":py_fsspec",
+        ":py_jinja2",
+        ":py_markupsafe",
+        ":py_mpmath",
+        ":py_networkx",
+        ":py_numpy",
+        ":py_pillow",
+        ":py_setuptools",
+        ":py_sympy",
+        ":py_torch",
+        ":py_torchvision",
+        ":py_typing_extensions",
+    ],
+)
+
+# =============================================================================
+# Python packages — data / analytics
+# =============================================================================
+
+license_declaration(
+    name = "py_pandas",
+    spdx_id = "BSD-3-Clause",
+    copyright = "Copyright 2008-2011, AQR Capital Management, LLC, Lambda Foundry, Inc., PyData Development Team.",
+    package_name = "pandas",
+    package_version = "2.2.3",
+    url = "https://opensource.org/licenses/BSD-3-Clause",
+)
+
+license_declaration(
+    name = "py_pyarrow",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2016, Apache Software Foundation.",
+    package_name = "pyarrow",
+    package_version = "20.0.0",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "py_fastparquet",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2016, Continuum Analytics.",
+    package_name = "fastparquet",
+    package_version = "2026.5.0",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "py_python_dateutil",
+    spdx_id = "Apache-2.0",
+    copyright = "Copyright 2003-2011, Gustavo Niemeyer. Copyright 2012-2014, Tomi Pievilainen.",
+    package_name = "python-dateutil",
+    package_version = "2.9.0",
+    url = "https://www.apache.org/licenses/LICENSE-2.0",
+)
+
+license_declaration(
+    name = "py_pytz",
+    spdx_id = "MIT",
+    copyright = "Copyright 2003-2024, Stuart Bishop.",
+    package_name = "pytz",
+    package_version = "2024.2",
+    url = "https://opensource.org/licenses/MIT",
+)
+
+license_declaration(
+    name = "py_six",
+    spdx_id = "MIT",
+    copyright = "Copyright 2010-2020, Benjamin Peterson.",
+    package_name = "six",
+    package_version = "1.16.0",
+    url = "https://opensource.org/licenses/MIT",
+)
+
+license_set(
+    name = "python_data_deps",
+    licenses = [
+        ":py_fastparquet",
+        ":py_numpy",
+        ":py_pandas",
+        ":py_pyarrow",
+        ":py_python_dateutil",
+        ":py_pytz",
+        ":py_six",
+    ],
+)
+
+# Note: license_report targets belong next to their artifacts.
+# See examples of usage in:
+#   examples/java/grpc_server/BUILD   → :server_licenses
+#   examples/go/grpc_server/BUILD     → :server_licenses
+#   examples/python/BUILD.bazel       → :demo_licenses

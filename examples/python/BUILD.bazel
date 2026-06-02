@@ -1,4 +1,5 @@
 load("//python:defs.bzl", "py_self_executable")
+load("//license:report.bzl", "license_report")
 
 # Build with:
 #   ./bazel build //examples/python:demo
@@ -24,5 +25,18 @@ py_self_executable(
         "@pip_certifi//:pkg",
         "@pip_charset_normalizer//:pkg",
         "@pip_idna//:pkg",
+    ],
+)
+
+# License report for the Python demo and all its transitive dependencies.
+# Build:  ./bazel build //examples/python:demo_licenses
+# Read:   cat bazel-bin/examples/python/demo_licenses_license_report.txt
+license_report(
+    name = "demo_licenses",
+    target = ":demo",
+    artifact_name = "Python requests demo (//examples/python:demo)",
+    deps_licenses = [
+        "//license:project_license",
+        "//license:python_requests",
     ],
 )
