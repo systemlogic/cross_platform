@@ -14,6 +14,9 @@ java_binary(
         "@maven_grpc_core//:jar",
         "@maven_grpc_netty_shaded//:jar",
     ],
+    tags = [
+        "server"
+    ],
 )
 
 # License report for the Java gRPC server and all its transitive dependencies.
