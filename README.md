@@ -256,6 +256,136 @@ If no server-tagged targets are transitively affected, the script exits `0` with
     //examples/python/clientServer:server
 ```
 
+## License Aggregation
+
+The `license/` package provides a lightweight, hermetic license-compliance system built entirely in Starlark — no external tools or plugins required.
+
+### Overview
+
+| File | Purpose |
+|------|---------|
+| `license/defs.bzl` | `license_declaration` rule + `LicenseInfo` provider |
+| `license/aspect.bzl` | `license_aspect` — propagates `LicensesInfo` through the transitive dep graph |
+| `license/report.bzl` | `license_report` and `license_set` rules |
+| `license/BUILD.bazel` | Pre-declared licenses for all known external dependencies |
+
+### Declaring a license
+
+```python
+load("//license:defs.bzl", "license_declaration")
+
+license_declaration(
+    name = "my_lib_license",
+    spdx_id    = "Apache-2.0",
+    package_name    = "my-lib",
+    package_version = "1.2.3",
+    url        = "https://www.apache.org/licenses/LICENSE-2.0",
+    copyright  = "Copyright 2024, Example Corp.",
+)
+```
+
+All attributes except `spdx_id` are optional. The `spdx_id` must be a valid [SPDX identifier](https://spdx.org/licenses/).
+
+### Generating a report
+
+Add a `license_report` target next to the artifact whose dependency tree you want to audit:
+
+```python
+load("//license:report.bzl", "license_report")
+
+license_report(
+    name          = "server_licenses",
+    target        = ":server",
+    artifact_name = "Java gRPC Server",
+    deps_licenses = [
+        "//license:java_grpc_deps",   # Maven JARs (not auto-discovered by the aspect)
+        "//license:project_license",  # first-party license
+    ],
+)
+```
+
+Build and read the report:
+
+```bash
+./bazel build //examples/java/grpc_server:server_licenses
+cat bazel-bin/examples/java/grpc_server/server_licenses_license_report.txt
+```
+
+Sample output:
+
+```
+======================================================================
+  LICENSE REPORT  :  Java gRPC Server (//examples/java/grpc_server:server)
+======================================================================
+  Unique license types : 3
+  Total packages       : 14
+======================================================================
+
+[ Apache-2.0 ]  (12 packages)
+----------------------------------------------------------------------
+  - cross_platform (this project)
+      Copyright : Copyright 2024, cross_platform contributors
+      License   : https://www.apache.org/licenses/LICENSE-2.0
+      Bazel     : //license:project_license
+  - grpc-java / grpc-api 1.68.1
+      Copyright : Copyright 2014, Google Inc.
+      ...
+
+[ BSD-3-Clause ]  (1 package)
+----------------------------------------------------------------------
+  - protobuf-java 4.29.3
+      ...
+
+[ CDDL-1.0 ]  (1 package)
+----------------------------------------------------------------------
+  - javax.annotation-api 1.3.2
+      ...
+======================================================================
+```
+
+### Grouping licenses with `license_set`
+
+`license_set` bundles multiple `license_declaration` targets so they can be referenced as a single label in `deps_licenses`:
+
+```python
+load("//license:report.bzl", "license_set")
+
+license_set(
+    name = "go_grpc_deps",
+    licenses = [
+        "//license:golang_grpc",
+        "//license:golang_protobuf",
+    ],
+)
+```
+
+### Pre-defined license sets
+
+`//license:BUILD.bazel` contains ready-to-use declarations and sets for all external dependencies in this repo:
+
+| Label | Contents |
+|-------|----------|
+| `//license:project_license` | First-party Apache-2.0 license for this repo |
+| `//license:java_grpc_deps` | 13 Maven JARs: gRPC-Java 1.68.x, Protobuf-Java 4.29.x, Guava, etc. |
+| `//license:go_grpc_deps` | `google.golang.org/grpc` v1.71.0 + `google.golang.org/protobuf` v1.36.10 |
+| `//license:python_requests` | `requests`, `urllib3`, `certifi`, `charset-normalizer`, `idna` |
+| `//license:python_torch_deps` | PyTorch 2.7.0, torchvision, NumPy, Pillow, and their transitive deps |
+| `//license:python_data_deps` | pandas, pyarrow, fastparquet, python-dateutil, pytz, six |
+
+### How the aspect works
+
+`license_aspect` is an [aspect](https://bazel.build/extending/aspects) that propagates through `deps`, `runtime_deps`, `exports`, and `licenses` attributes. For each target carrying a `LicenseInfo` provider it serialises the metadata to a JSON string and accumulates it in a `depset` (which deduplicates entries reached via multiple paths). The `license_report` rule writes this collected data to a human-readable text file at build time — no network access or post-processing script needed.
+
+External dependencies (Maven JARs, pip wheels, Go modules) are not Bazel targets that the aspect can traverse, so their licenses must be supplied explicitly via the `deps_licenses` attribute using the pre-defined sets in `//license:BUILD.bazel`.
+
+### Existing report targets
+
+| Target | Artifact |
+|--------|---------|
+| `//examples/java/grpc_server:server_licenses` | Java gRPC server |
+| `//examples/go/grpc_server:server_licenses` | Go gRPC server |
+| `//examples/python:demo_licenses` | Python requests demo |
+
 ## Architecture
 
 ### Toolchain Registration Flow (Bzlmod)
