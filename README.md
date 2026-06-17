@@ -87,6 +87,33 @@ Linux toolchains are pinned per-build via `--extra_toolchains` in `.bazelrc` (no
 
 macOS toolchains are registered globally in `MODULE.bazel` and auto-selected by Bazel based on exec+target constraints.
 
+### Per-target Linux arm64 transition (`transitions.bzl`)
+
+An alternative to `--config=arm64` for cases where a single `BUILD` rule should always produce an arm64 binary without requiring a command-line flag.
+
+`transitions.bzl` provides a `linux_arm64_binary` rule that applies a Starlark [configuration transition](https://bazel.build/extending/config#user-defined-transitions) mirroring `.bazelrc`'s `build:arm64` config — setting `//command_line_option:platforms` to `//:arm64_platform`, `--cpu` to `arm64`, and registering both Linux arm64 toolchains:
+
+```python
+load("//:transitions.bzl", "linux_arm64_binary")
+
+cc_binary(name = "hello-world", srcs = ["main.cc"], ...)
+
+linux_arm64_binary(
+    name = "hello-world_arm64",
+    binary = ":hello-world",
+)
+```
+
+Build without any config flag:
+
+```bash
+bazel build //examples/cc/main:hello-world_arm64
+```
+
+**Exec platform behavior:**
+- On x86_64 exec: Bazel selects `gcc_arm64_toolchain` (GCC 9 ARM cross-compiler).
+- On aarch64 exec: Bazel selects `gcc_arm64_native_toolchain` (ARM GCC 14.2).
+
 ## Parallel Cross-Platform Testing
 
 `test_cross_platform.sh` runs builds and tests for **x86_64**, **arm64** (Linux, in Docker), and **macos_arm64** simultaneously in a 2×2 tmux grid.
@@ -427,6 +454,7 @@ The `WORKSPACE` file is a stub — all repository and toolchain management has b
 
 | File | Purpose |
 |------|---------|
+| `transitions.bzl` | `linux_arm64_binary` rule: applies a per-target config transition to build Linux arm64 without `--config=arm64` |
 | `test_cross_platform.sh` | Parallel build+test runner: x86_64 + arm64 (Docker) + macos_arm64 (host) in a 2×2 tmux grid |
 | `coverage_check.sh` | Patch coverage checker: runs `bazel coverage`, filters to last-commit diff lines, enforces threshold |
 | `setup.sh` | Installs required host packages before building (idempotent; called by `test_cross_platform.sh`) |
