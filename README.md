@@ -599,3 +599,102 @@ PyTorch dispatches `torch.matmul` to Apple's **MPSMatrixMultiplication** kernel 
 4. Add a `cc_toolchain_config`, `cc_toolchain`, `toolchain`, and `platform` block in `BUILD.bazel`.
 5. Extend the appropriate toolchain config `.bzl` file if the new arch needs a different sysroot layout.
 6. Add a `--config=<arch>` shortcut in `.bazelrc` with appropriate `--extra_toolchains` if Linux.
+
+## Private Repository Access via SSH (`git insteadOf`)
+
+Bazel fetches Go modules and other dependencies over HTTPS by default. If any dependency lives in a **private repository** (e.g. a private GitHub org, an internal GitLab instance), authentication must be supplied. The standard approach is to redirect HTTPS URLs to SSH using `git insteadOf` so that your SSH key is used instead of a password or token.
+
+### One-time setup (per developer machine)
+
+```bash
+git config --global url."git@github.com:".insteadOf "https://github.com/"
+```
+
+This rewrites every `https://github.com/<org>/<repo>` URL to `git@github.com:<org>/<repo>` transparently for all tools — including Bazel's repository rules and the `go` tool invoked by `rules_go`.
+
+For a private GitLab or self-hosted instance, replace the hostname accordingly:
+
+```bash
+git config --global url."git@gitlab.example.com:".insteadOf "https://gitlab.example.com/"
+```
+
+Verify the rewrite is active:
+
+```bash
+git config --global --get-regexp url
+# Expected output:
+# url.git@github.com:.insteadof https://github.com/
+```
+
+### SSH key requirements
+
+- Your SSH key must be added to `~/.ssh/` and loaded in `ssh-agent` (`ssh-add ~/.ssh/id_ed25519`).
+- The corresponding public key must be registered in the private repo's hosting platform (GitHub → Settings → SSH Keys, GitLab → Preferences → SSH Keys, etc.).
+- Confirm SSH access before running Bazel:
+  ```bash
+  ssh -T git@github.com   # Expected: "Hi <user>! You've successfully authenticated…"
+  ```
+
+### Go modules (`rules_go` / `gazelle`)
+
+`rules_go` invokes the `go` tool to resolve modules listed in `go.mod`. The `go` tool honours `git insteadOf` rewrites, but also requires:
+
+1. **`GONOSUMCHECK` / `GONOSUMDB`** — bypass the Go checksum database for private modules (it cannot reach private repos):
+   ```bash
+   export GONOSUMCHECK="github.com/my-org/*"
+   export GONOSUMDB="github.com/my-org/*"
+   ```
+
+2. **`GOPRIVATE`** — disables the module proxy and sum-DB for matching paths:
+   ```bash
+   export GOPRIVATE="github.com/my-org/*"
+   ```
+
+   Add these to your shell profile (`~/.zshrc`, `~/.bashrc`) so they are inherited by every Bazel invocation.
+
+3. Pass them to Bazel via `.bazelrc` (project-level, not committed if the org name is confidential) or `~/.bazelrc` (user-level):
+   ```
+   # ~/.bazelrc  (never committed)
+   build --action_env=GONOSUMCHECK=github.com/my-org/*
+   build --action_env=GONOSUMDB=github.com/my-org/*
+   build --action_env=GOPRIVATE=github.com/my-org/*
+   ```
+
+### CI / Docker environments
+
+Docker containers and CI agents do not inherit your host SSH agent. Options:
+
+**Option A — mount SSH agent socket (recommended for local Docker)**
+
+```bash
+docker run --rm \
+  -v "$SSH_AUTH_SOCK:/ssh-agent" \
+  -e SSH_AUTH_SOCK=/ssh-agent \
+  <image> \
+  ./bazel build ...
+```
+
+**Option B — mount a read-only SSH key (CI)**
+
+```bash
+docker run --rm \
+  -v "$HOME/.ssh/id_ed25519:/root/.ssh/id_ed25519:ro" \
+  <image> \
+  bash -c "ssh-add /root/.ssh/id_ed25519 && ./bazel build ..."
+```
+
+**Option C — use a deploy key or machine user token** for fully automated pipelines where SSH agent forwarding is impractical. Store the token in a CI secret and configure `git insteadOf` inside the container's entrypoint:
+
+```bash
+git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf \
+  "https://github.com/"
+```
+
+### Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| `no such host` / `authentication failed` fetching a Go module | SSH key not loaded or not registered | Run `ssh-add` and verify with `ssh -T git@github.com` |
+| `verifying module: checksum mismatch` | Sum-DB checked a private module | Set `GONOSUMCHECK`/`GOPRIVATE` |
+| Bazel repository rule fails with `couldn't connect` | `insteadOf` not set in the exec environment | Add `git config` in the container entrypoint or CI setup step |
+| `Permission denied (publickey)` inside Docker | SSH agent not forwarded | Use Option A or B above |
