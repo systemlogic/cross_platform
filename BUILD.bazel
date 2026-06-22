@@ -16,10 +16,12 @@ filegroup(name = "empty")
 #   gcc_x86_64_toolchain  →  target: Linux x86_64  (Bootlin native x86_64 GCC 9)
 #   gcc_arm64_toolchain   →  target: Linux arm64   (ARM x86_64-hosted cross-compiler GCC 9)
 #
+#
 # exec: Linux aarch64
 #   gcc_arm64_native_toolchain            →  target: Linux arm64  (ARM aarch64-hosted GCC 14.2)
 #   gcc_x86_64_on_linux_aarch64_toolchain →  target: Linux x86_64 (Ubuntu aarch64-hosted GCC 12 cross-compiler)
 # =============================================================================
+
 
 # --- exec: Linux x86_64 / target: Linux x86_64 ---
 cc_toolchain_config(
