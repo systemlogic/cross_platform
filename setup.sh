@@ -16,6 +16,7 @@ ARCH="$(uname -m)"
 REQUIRED_PACKAGES=(
   "libxml2-dev:Linux:arm64"
   "curl:Linux:*"
+  "tmux:Darwin:*"
 )
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -73,3 +74,9 @@ for entry in "${REQUIRED_PACKAGES[@]}"; do
     install_pkg "${pkg}" "${PKG_MGR}"
   fi
 done
+
+# ── macOS-only setup ──────────────────────────────────────────────────────────
+if [[ "${OS}" == "Darwin" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  "${SCRIPT_DIR}/setup_buildbuddy.sh"
+fi

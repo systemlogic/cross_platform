@@ -53,13 +53,23 @@ build:stats --copt=-pg
 build:stats --copt=-DSTATS_ENABLED
 build:stats --linkopt=-pg
 
-# Run below command on local to setup remote cache on local machine
-# docker run -u 1000:1000 -p 9092:9092 \
-#   -v /Volumes/Storage/cache:/data buchgr/bazel-remote-cache \
-#   --max_size 5000 --grpc_address 0.0.0.0:9092
-# build --remote_cache=grpc://192.168.1.15:9092
 
-# build --repository_cache=~/.cache/bazel/repository_cache
-# common --experimental_repository_cache_hardlinks=true
-# fetch --loading_phase_threads=HOST_CPUS
-# common --experimental_scale_timeouts=2.0
+# ── BuildBuddy on-prem (local Docker) ────────────────────────────────────────
+# Start with: ./setup_buildbuddy.sh 
+# Stop  with: ./setup_buildbuddy.sh stop
+# Web UI: https://localhost:8080
+
+build --bes_results_url=http://buildbuddy-app:8080/invocation/
+build --bes_backend=grpc://buildbuddy-app:1985
+build --remote_cache=grpc://buildbuddy-app:1985  # port 1985 is gRPC (cache + BES); 9090 is monitoring only
+build --remote_timeout=10m
+# build:bb_container_rbe --remote_executor=grpc://buildbuddy-app:1985
+
+# Remove above and point to buildbuddy API once high capacity cluster is available
+# build:cloud_buddy --bes_results_url=https://app.buildbuddy.io/invocation/
+# build:cloud_buddy --bes_backend=grpcs://remote.buildbuddy.io
+# build:cloud_buddy --remote_cache=grpcs://remote.buildbuddy.io
+# build:cloud_buddy --remote_timeout=10m
+# build:cloud_buddy --remote_header=x-buildbuddy-api-key=xxxxxxxxxxxx
+
+

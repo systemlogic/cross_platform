@@ -67,6 +67,9 @@ ensure_container() {
             docker start "$name"
             ;;
     esac
+    # Join the buildbuddy-net network so the container can reach the
+    # BuildBuddy remote cache (grpc://buildbuddy-app:9090).
+    docker network connect buildbuddy-net "$name" 2>/dev/null || true
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
