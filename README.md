@@ -140,6 +140,7 @@ bazel build //examples/cc/main:hello-world_arm64
 
 - Linux builds run inside long-lived Docker containers (`cross_build_x86_64`, `cross_build_arm64`). Containers are created on first run, restarted on subsequent runs — never removed — so they are reused across invocations.
 - Bazel output caches are persisted in named Docker volumes (`cross_build_x86_64_bazel_cache`, `cross_build_arm64_bazel_cache`) that survive container restarts and Bazel version changes.
+- Each container is joined to the `buildbuddy-net` Docker network so it can reach the BuildBuddy remote cache at `grpc://buildbuddy-app:1985`.
 - The macOS arm64 build runs natively on the host — no Docker.
 - x86_64 runs under QEMU emulation on Apple Silicon. Bazel JVM startup can take several minutes; a heartbeat line is printed every 30 s so the pane stays visibly alive.
 - Each arch runs `./setup.sh` first to install required host packages, then executes `./bazel test` followed by `./bazel build` for `//examples/...`.
@@ -154,13 +155,56 @@ bazel build //examples/cc/main:hello-world_arm64
 
 ### setup.sh
 
-`setup.sh` installs required host packages before building. It is called automatically by `test_cross_platform.sh` and is safe to run multiple times (no-op if all packages are already present). Currently installs `libxml2-dev` (Linux arm64) and `curl` (all Linux).
+`setup.sh` installs required host packages before building. It is called automatically by `test_cross_platform.sh` and is safe to run multiple times (no-op if all packages are already present). Currently installs `libxml2-dev` (Linux arm64), `curl` (all Linux), and `tmux` (macOS). On macOS it also automatically calls `./setup_buildbuddy.sh` to start the BuildBuddy on-prem remote cache.
 
 To add a new requirement, append an entry to `REQUIRED_PACKAGES` inside `setup.sh`:
 
 ```bash
 "package_name:OS:arch"   # OS: Linux | Darwin | *   arch: arm64 | aarch64 | x86_64 | *
 ```
+
+## BuildBuddy On-Prem (Remote Cache)
+
+`setup_buildbuddy.sh` starts a local [BuildBuddy](https://www.buildbuddy.io/) on-prem instance in Docker and wires it up as a remote cache and build-event stream for all Bazel invocations.
+
+```bash
+./setup_buildbuddy.sh          # start / ensure running
+./setup_buildbuddy.sh stop     # stop all BuildBuddy containers
+./setup_buildbuddy.sh status   # show container status
+```
+
+On **macOS**, `setup.sh` calls this script automatically so the cache is always available before builds start.
+
+### What it starts
+
+| Container | Image | Ports |
+|-----------|-------|-------|
+| `buildbuddy-app` | `gcr.io/flame-public/buildbuddy-app-onprem:latest` | HTTP `8080`, gRPC `1985` |
+| `buildbuddy-executor` | `gcr.io/flame-public/buildbuddy-executor-onprem:latest` | (Linux only) |
+
+Both containers are placed on the `buildbuddy-net` Docker network. Cross-platform build containers created by `test_cross_platform.sh` are also joined to this network, so they can reach the cache at `grpc://buildbuddy-app:1985`.
+
+**Web UI:** `http://localhost:8080`
+
+### `.bazelrc` wiring
+
+The following flags are active for every build (no opt-in needed):
+
+```
+build --bes_results_url=http://buildbuddy-app:8080/invocation/
+build --bes_backend=grpc://buildbuddy-app:1985
+build --remote_cache=grpc://buildbuddy-app:1985
+build --remote_timeout=10m
+```
+
+Remote execution (`--remote_executor`) is available on Linux (app + executor both running) but commented out by default. Cloud BuildBuddy (`app.buildbuddy.io`) config is also present but commented out — uncomment and add your API key to switch to the hosted service.
+
+### Behaviour by OS
+
+| OS | What starts | Cache | RBE |
+|----|-------------|-------|-----|
+| Linux (x86_64 / arm64) | app + executor | yes | yes (executor available) |
+| macOS (arm64 / x86_64) | app only | yes | no |
 
 ## Code Coverage
 
@@ -457,7 +501,8 @@ The `WORKSPACE` file is a stub — all repository and toolchain management has b
 | `transitions.bzl` | `linux_arm64_binary` rule: applies a per-target config transition to build Linux arm64 without `--config=arm64` |
 | `test_cross_platform.sh` | Parallel build+test runner: x86_64 + arm64 (Docker) + macos_arm64 (host) in a 2×2 tmux grid |
 | `coverage_check.sh` | Patch coverage checker: runs `bazel coverage`, filters to last-commit diff lines, enforces threshold |
-| `setup.sh` | Installs required host packages before building (idempotent; called by `test_cross_platform.sh`) |
+| `setup.sh` | Installs required host packages before building (idempotent; called by `test_cross_platform.sh`); auto-starts BuildBuddy on macOS |
+| `setup_buildbuddy.sh` | Starts/stops BuildBuddy on-prem in Docker (app + executor on Linux, app only on macOS); wires `buildbuddy-net` |
 | `toolchain_extension.bzl` | Bzlmod module extension; instantiates all external repos; loaded by `MODULE.bazel` |
 | `toolchain_repositories.bzl` | All repository rules: `toolchain_archive_repository`, `macos_sdk_repository`, GCC/LLVM/JDK/protoc/plugin wrappers, `grpc_java_maven_repositories` |
 | `external_tool/external_tool_repositories.bzl` | Legacy WORKSPACE helper (retained but not the primary path); calls a subset of repos |
