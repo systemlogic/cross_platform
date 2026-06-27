@@ -244,6 +244,22 @@ register_toolchains("@cpython//:toolchain")
 # Java
 bazel_dep(name = "rules_java", version = "9.6.1")
 
+# iOS / Apple
+bazel_dep(name = "apple_support", version = "2.2.0")
+bazel_dep(name = "rules_apple", version = "4.5.3")
+bazel_dep(name = "rules_swift", version = "3.6.1")
+
+# Expose the Apple CC toolchains repo so .bazelrc can reference it via
+# @local_config_apple_cc_toolchains. We add it to --extra_toolchains
+# globally so it takes priority over our LLVM toolchain for Apple
+# platform targets (which carry the :apple constraint). Plain C/C++
+# targets don't have :apple, so the LLVM toolchain still wins for those.
+apple_cc_configure = use_extension(
+    "@apple_support//crosstool:setup.bzl",
+    "apple_cc_configure_extension",
+)
+use_repo(apple_cc_configure, "local_config_apple_cc_toolchains")
+
 # Go
 bazel_dep(name = "rules_go", version = "0.60.0")
 bazel_dep(name = "gazelle", version = "0.36.0")

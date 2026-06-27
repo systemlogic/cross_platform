@@ -1,6 +1,12 @@
 # Register toolchains
 build --incompatible_enable_cc_toolchain_resolution
 
+# Give the Xcode-backed Apple CC toolchains (from apple_support) the highest
+# priority so they win for Apple platform targets (ios_application,
+# macos_application, etc.) which carry @build_bazel_apple_support//constraints:apple.
+# Plain C/C++ targets lack that constraint, so our LLVM toolchains still win for those.
+build --extra_toolchains=@local_config_apple_cc_toolchains//:all
+
 # Python: use the Bazel-downloaded interpreter (CPython 3.12) for all py_* targets.
 # "script" bootstrap generates a shell-script launcher that calls the toolchain
 # Python binary directly, eliminating the #!/usr/bin/env python3 shebang that

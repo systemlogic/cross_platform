@@ -1,4 +1,4 @@
-load("@bazel_tools//tools/cpp:cc_toolchain_config_lib.bzl", "feature", "flag_group", "flag_set", "tool_path", "variable_with_value", "with_feature_set")
+load("@bazel_tools//tools/cpp:cc_toolchain_config_lib.bzl", "action_config", "feature", "flag_group", "flag_set", "tool", "tool_path", "variable_with_value", "with_feature_set")
 load("@bazel_tools//tools/build_defs/cc:action_names.bzl", "ACTION_NAMES")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 
@@ -62,6 +62,7 @@ def _impl(ctx):
                         ACTION_NAMES.cpp_link_executable,
                         ACTION_NAMES.cpp_link_dynamic_library,
                         ACTION_NAMES.cpp_link_nodeps_dynamic_library,
+                        ACTION_NAMES.objc_executable,
                     ],
                     flag_groups = [
                         flag_group(
@@ -134,6 +135,7 @@ def _impl(ctx):
                         ACTION_NAMES.cpp_link_executable,
                         ACTION_NAMES.cpp_link_dynamic_library,
                         ACTION_NAMES.cpp_link_nodeps_dynamic_library,
+                        ACTION_NAMES.objc_executable,
                     ],
                     flag_groups = [
                         flag_group(
@@ -198,6 +200,7 @@ def _impl(ctx):
                     actions = [
                         ACTION_NAMES.cpp_link_executable,
                         ACTION_NAMES.cpp_link_dynamic_library,
+                        ACTION_NAMES.objc_executable,
                     ],
                     flag_groups = [flag_group(flags = link_flags)],
                 ),
@@ -211,10 +214,27 @@ def _impl(ctx):
                     actions = [
                         ACTION_NAMES.cpp_link_executable,
                         ACTION_NAMES.cpp_link_dynamic_library,
+                        ACTION_NAMES.objc_executable,
                     ],
                     flag_groups = [flag_group(flags = ["-Wl,-S"])],
                     with_features = [with_feature_set(features = ["opt"])],
                 ),
+            ],
+        ),
+    ]
+
+    # rules_apple requires explicit action_configs for ObjC link actions.
+    # Both actions invoke clang just like a C++ link — Swift/ObjC runtime
+    # linking on macOS uses the same clang driver flags.
+    action_configs = [
+        action_config(
+            action_name = ACTION_NAMES.objc_executable,
+            enabled = True,
+            tools = [tool(path = ctx.attr.clang_path)],
+            implies = [
+                "default_linker_flags",
+                "libraries_to_link",
+                "runtime_library_search_directories",
             ],
         ),
     ]
@@ -228,9 +248,10 @@ def _impl(ctx):
     return cc_common.create_cc_toolchain_config_info(
         ctx = ctx,
         features = features,
+        action_configs = action_configs,
         toolchain_identifier = ctx.label.name,
         host_system_name = "local",
-        target_system_name = "local",
+        target_system_name = ctx.attr.target_triple,
         target_cpu = ctx.attr.cpu,
         target_libc = "macos",
         compiler = "clang",
