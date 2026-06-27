@@ -636,6 +636,147 @@ PyTorch dispatches `torch.matmul` to Apple's **MPSMatrixMultiplication** kernel 
 
 `torch.mps.synchronize()` is required before stopping the timer because GPU work is submitted asynchronously; without it the measured time reflects only submission latency, not completion.
 
+## iOS / macOS Application Development (Swift + SwiftUI)
+
+`examples/ios/` contains a minimal Swift/SwiftUI application and its unit test, built entirely with Bazel using `rules_apple` and `rules_swift`. No Xcode project file is required — Bazel drives the full build and test cycle, using the Xcode-backed toolchain from `apple_support`.
+
+### Dependencies
+
+Declared in `MODULE.bazel`:
+
+| Module | Version | Role |
+|--------|---------|------|
+| `apple_support` | 2.2.0 | Xcode-backed CC toolchain (`local_config_apple_cc_toolchains`) |
+| `rules_apple` | 4.5.3 | `ios_application`, `macos_application`, `*_unit_test` rules |
+| `rules_swift` | 3.6.1 | `swift_library` rule; Swift compilation |
+
+The Apple CC toolchains are registered at the highest priority in `.bazelrc`:
+
+```
+build --extra_toolchains=@local_config_apple_cc_toolchains//:all
+```
+
+This ensures Bazel selects the Xcode-backed compiler for any target carrying the Apple platform constraint (e.g. `@build_bazel_apple_support//constraints:apple`), while the LLVM-based toolchains still handle plain C/C++ targets.
+
+### Prerequisites
+
+- **macOS arm64** — both targets carry `target_compatible_with = [@platforms//os:macos, @platforms//cpu:arm64]`.
+- **Xcode** must be installed and its command-line tools active (`xcode-select -p` should return a valid path). Bazel auto-discovers the SDK via `xcrun`.
+- A valid `--apple_platform_type` is selected automatically from the rule (`macos`).
+
+### Project structure
+
+```
+examples/ios/
+├── BUILD.bazel          # Bazel build definitions
+├── DemoApp.swift        # SwiftUI app entry point + ContentView
+├── DemoTest.swift       # Unit test using Swift Testing (@Suite / @Test)
+├── Info.plist           # iOS bundle Info.plist (phone/tablet orientations)
+└── Info_macos.plist     # macOS bundle Info.plist (NSApplication)
+```
+
+### Build targets
+
+| Target | Rule | Description |
+|--------|------|-------------|
+| `//examples/ios:AppLibrary` | `swift_library` | Shared Swift library compiled from `DemoApp.swift` |
+| `//examples/ios:DemoMacApp` | `macos_application` | macOS desktop app bundle (bundle ID `com.buildbuddy.demomacapp`, min OS 15.0) |
+| `//examples/ios:DemoTestLib` | `swift_library` | Swift library compiled from `DemoTest.swift` (`testonly`) |
+| `//examples/ios:DemoMacTest` | `macos_unit_test` | Unit test bundle (min OS 15.0) |
+
+### Build and run
+
+```bash
+# Build the macOS app bundle (macOS arm64 only)
+./bazel build --config=macos_arm64 //examples/ios:DemoMacApp
+
+# Build and launch the macOS app
+./bazel run --config=macos_arm64 //examples/ios:DemoMacApp
+
+# Run the unit tests
+./bazel test --config=macos_arm64 //examples/ios:DemoMacTest
+
+# Build all iOS targets
+./bazel build --config=macos_arm64 //examples/ios/...
+
+# Test all iOS targets
+./bazel test --config=macos_arm64 //examples/ios/...
+```
+
+The built `.app` bundle lands at:
+
+```
+bazel-bin/examples/ios/DemoMacApp.app
+```
+
+Open it directly:
+
+```bash
+open bazel-bin/examples/ios/DemoMacApp.app
+```
+
+### Source overview
+
+**`DemoApp.swift`** — SwiftUI entry point declared with `@main`. Renders a `ContentView` with a globe icon and "Hello, world!" text:
+
+```swift
+@main
+struct DemoApp: App {
+    var body: some Scene {
+        WindowGroup { ContentView() }
+    }
+}
+```
+
+**`DemoTest.swift`** — uses the Swift Testing framework (`import Testing`). `@Suite` / `@Test` replace XCTest's `class`/`func test` boilerplate:
+
+```swift
+@Suite
+struct DemoTest {
+    @Test
+    func example() {
+        #expect(1 + 1 == 2)
+    }
+}
+```
+
+### Info.plist files
+
+| File | Used by | Key details |
+|------|---------|-------------|
+| `Info_macos.plist` | `DemoMacApp` | `NSApplication` principal class; `NSHighResolutionCapable = true` |
+| `Info.plist` | Available for iOS targets | Portrait + landscape orientations; `LSRequiresIPhoneOS = true` |
+
+### Adding an iOS simulator target
+
+To add an iOS simulator build, extend `BUILD.bazel` with `ios_application` and `ios_unit_test` (already imported):
+
+```python
+ios_application(
+    name = "DemoIOSApp",
+    bundle_id = "com.buildbuddy.demoiosapp",
+    families = ["iphone", "ipad"],
+    infoplists = ["Info.plist"],
+    minimum_os_version = "17.0",
+    deps = [":AppLibrary"],
+)
+
+ios_unit_test(
+    name = "DemoIOSTest",
+    minimum_os_version = "17.0",
+    deps = [":DemoTestLib"],
+)
+```
+
+Then build/test against a simulator platform:
+
+```bash
+./bazel build --config=macos_arm64 \
+  --apple_platform_type=ios \
+  --ios_simulator_device="iPhone 16" \
+  //examples/ios:DemoIOSApp
+```
+
 ## Adding a New Target Architecture
 
 1. Add a repository function in `toolchain_repositories.bzl` pointing to the archive URL.

@@ -1,0 +1,42 @@
+load("@rules_apple//apple:ios.bzl", "ios_application", "ios_unit_test")
+load("@rules_apple//apple:macos.bzl", "macos_application", "macos_unit_test")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+swift_library(
+    name = "AppLibrary",
+    srcs = ["DemoApp.swift"],
+    tags = ["manual"],
+)
+
+macos_application(
+    name = "DemoMacApp",
+    bundle_id = "com.buildbuddy.demomacapp",
+    infoplists = ["Info_macos.plist"],
+    minimum_os_version = "15.0",
+    deps = [":AppLibrary"],
+    families = [
+        "iphone",
+        "ipad",
+    ],
+    target_compatible_with = [
+        "@platforms//os:macos",
+        "@platforms//cpu:arm64",
+    ],
+)
+
+swift_library(
+    name = "DemoTestLib",
+    testonly = True,
+    srcs = ["DemoTest.swift"],
+    tags = ["manual"],
+)
+
+macos_unit_test(
+    name = "DemoMacTest",
+    minimum_os_version = "15.0",
+    deps = [":DemoTestLib"],
+    target_compatible_with = [
+        "@platforms//os:macos",
+        "@platforms//cpu:arm64",
+    ],
+)
