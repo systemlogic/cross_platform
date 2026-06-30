@@ -5,9 +5,10 @@
 # macOS  (arm64 + x86_64): starts app only        → use --config=bb_macos
 #
 # Usage:
-#   ./setup_buildbuddy.sh          # start / ensure running
+#   ./setup_buildbuddy.sh          # start / ensure running (includes metrics stack)
 #   ./setup_buildbuddy.sh stop     # stop all BuildBuddy containers
 #   ./setup_buildbuddy.sh status   # show container status
+#   ./setup_buildbuddy.sh rm       # stop + remove all containers and local images
 
 set -euo pipefail
 
@@ -15,13 +16,23 @@ set -euo pipefail
 APP_IMAGE="gcr.io/flame-public/buildbuddy-app-onprem:latest"
 EXECUTOR_IMAGE="gcr.io/flame-public/buildbuddy-executor-onprem:latest"
 
+PROMETHEUS_LOCAL_IMAGE="buildbuddy-prometheus:local"
+GRAFANA_LOCAL_IMAGE="buildbuddy-grafana:local"
+
 APP_NAME="buildbuddy-app"
 EXECUTOR_NAME="buildbuddy-executor"
+PROMETHEUS_CONTAINER="buildbuddy-prometheus"
+GRAFANA_CONTAINER="buildbuddy-grafana"
 NETWORK_NAME="buildbuddy-net"
 
 GRPC_PORT=1985
 HTTP_PORT=8080
 MONITORING_PORT=9090
+PROMETHEUS_HOST_PORT=9091
+GRAFANA_PORT=3000
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+METRICS_DIR="${SCRIPT_DIR}/metrics"
 
 OS="$(uname -s)"
 ARCH="$(uname -m)"
@@ -87,6 +98,7 @@ start_app() {
             --network "${NETWORK_NAME}" \
             -p "${GRPC_PORT}:${GRPC_PORT}" \
             -p "${HTTP_PORT}:${HTTP_PORT}" \
+            -p "${MONITORING_PORT}:${MONITORING_PORT}" \
             "${APP_IMAGE}"
     fi
 
@@ -123,11 +135,73 @@ start_executor_linux() {
     echo "[executor] Executor started and connected to app on port ${GRPC_PORT}."
 }
 
+build_metrics_images() {
+    echo "[metrics] Building Prometheus image..."
+    docker build -t "${PROMETHEUS_LOCAL_IMAGE}" "${METRICS_DIR}" -f "${METRICS_DIR}/Dockerfile" --quiet
+    echo "[metrics] Building Grafana image..."
+    docker build -t "${GRAFANA_LOCAL_IMAGE}" "${METRICS_DIR}" -f "${METRICS_DIR}/Dockerfile.grafana" --quiet
+}
+
+start_metrics() {
+    build_metrics_images
+
+    if container_running "${PROMETHEUS_CONTAINER}"; then
+        echo "[prometheus] Already running."
+    elif container_exists "${PROMETHEUS_CONTAINER}"; then
+        echo "[prometheus] Restarting stopped container..."
+        docker start "${PROMETHEUS_CONTAINER}"
+    else
+        echo "[prometheus] Starting Prometheus..."
+        docker run -d \
+            --name "${PROMETHEUS_CONTAINER}" \
+            --restart unless-stopped \
+            --network "${NETWORK_NAME}" \
+            -p "${PROMETHEUS_HOST_PORT}:9090" \
+            "${PROMETHEUS_LOCAL_IMAGE}"
+    fi
+    docker network connect "${NETWORK_NAME}" "${PROMETHEUS_CONTAINER}" 2>/dev/null || true
+
+    if container_running "${GRAFANA_CONTAINER}"; then
+        echo "[grafana] Already running."
+    elif container_exists "${GRAFANA_CONTAINER}"; then
+        echo "[grafana] Restarting stopped container..."
+        docker start "${GRAFANA_CONTAINER}"
+    else
+        echo "[grafana] Starting Grafana..."
+        docker run -d \
+            --name "${GRAFANA_CONTAINER}" \
+            --restart unless-stopped \
+            --network "${NETWORK_NAME}" \
+            -p "${GRAFANA_PORT}:3000" \
+            "${GRAFANA_LOCAL_IMAGE}"
+    fi
+    docker network connect "${NETWORK_NAME}" "${GRAFANA_CONTAINER}" 2>/dev/null || true
+
+    wait_for_port "${GRAFANA_PORT}" "Grafana"
+}
+
 do_stop() {
-    for name in "${APP_NAME}" "${EXECUTOR_NAME}"; do
+    for name in "${APP_NAME}" "${EXECUTOR_NAME}" "${PROMETHEUS_CONTAINER}" "${GRAFANA_CONTAINER}"; do
         if container_running "${name}"; then
             echo "Stopping ${name}..."
             docker stop "${name}"
+        fi
+    done
+    echo "Done."
+}
+
+do_rm() {
+    do_stop
+    for name in "${APP_NAME}" "${EXECUTOR_NAME}" "${PROMETHEUS_CONTAINER}" "${GRAFANA_CONTAINER}"; do
+        if container_exists "${name}"; then
+            echo "Removing container ${name}..."
+            docker rm "${name}"
+        fi
+    done
+    for image in "${PROMETHEUS_LOCAL_IMAGE}" "${GRAFANA_LOCAL_IMAGE}"; do
+        if docker image inspect "${image}" &>/dev/null; then
+            echo "Removing image ${image}..."
+            docker rmi "${image}"
         fi
     done
     echo "Done."
@@ -138,6 +212,10 @@ do_status() {
     docker ps -a \
         --filter "name=buildbuddy" \
         --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    echo ""
+    echo "=== Local metrics images ==="
+    docker images --filter "reference=buildbuddy-prometheus" --filter "reference=buildbuddy-grafana" \
+        --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}"
 }
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -148,8 +226,9 @@ CMD="${1:-start}"
 case "${CMD}" in
     stop)   do_stop;   exit 0 ;;
     status) do_status; exit 0 ;;
+    rm)     do_rm;     exit 0 ;;
     start)  ;;
-    *) die "Unknown command '${CMD}'. Usage: $0 [start|stop|status]" ;;
+    *) die "Unknown command '${CMD}'. Usage: $0 [start|stop|status|rm]" ;;
 esac
 
 echo "=== BuildBuddy on-prem setup (OS: ${OS}, arch: ${ARCH}) ==="
@@ -161,10 +240,15 @@ if [[ "${OS}" == "Linux" ]]; then
     start_executor_linux
 fi
 
+start_metrics
+
 echo ""
 echo "BuildBuddy is running."
-echo "  Web UI : http://localhost:${HTTP_PORT}"
-echo "  gRPC   : grpc://localhost:${GRPC_PORT}"
+echo "  Web UI        : http://localhost:${HTTP_PORT}"
+echo "  gRPC          : grpc://localhost:${GRPC_PORT}"
+echo "  Raw metrics   : http://localhost:${MONITORING_PORT}/metrics"
+echo "  Prometheus    : http://localhost:${PROMETHEUS_HOST_PORT}"
+echo "  Grafana       : http://localhost:${GRAFANA_PORT}  (admin / admin)"
 echo ""
 if [[ "${OS}" == "Linux" ]]; then
     echo "Use in Bazel (Linux — cache + RBE):"
