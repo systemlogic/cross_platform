@@ -1,0 +1,296 @@
+---
+# Cross-platform bazel test + build pipeline.
+#
+# Runs the x86_64, arm64 (Linux in Docker) and macOS ARM64 bazel test+build
+# in parallel and prints a single pass/fail summary at the end.
+#
+# Container behaviour:
+#   • Containers are long-lived (sleep infinity) and reused across runs.
+#   • Bazel output cache is persisted in named Docker volumes.
+#   • All three builds run detached (backgrounded on the host) and write to
+#     their own log + status file. A single task then live-tails all three
+#     logs to the terminal until every status file appears, instead of
+#     Ansible's noisy async "FAILED - RETRYING" polling.
+#   • pipeline_env=dev (default): reuse the x86_64/arm64 containers + image
+#     as-is if already present. pipeline_env=build: always pull a fresh
+#     docker_image and recreate the containers from it.
+#
+# Requires: community.docker collection  →  ansible-galaxy install -r requirements.yml
+#
+# Usage:
+#   ansible-playbook pipeline.yml
+#   ansible-playbook pipeline.yml -e pipeline_env=build
+
+- name: Cross-platform bazel test + build pipeline
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    workspace_dir: "{{ playbook_dir }}/.."
+    docker_image: "ubuntu:latest"
+    network_name: "buildbuddy-net"
+
+    # dev (default): reuse the existing x86_64/arm64 docker containers and
+    #   image as-is if they're already there — nothing is pulled/recreated.
+    # build: always pull a fresh docker_image and recreate the containers.
+    # Override with: ansible-playbook pipeline.yml -e pipeline_env=build
+    pipeline_env: "dev"
+    # Job timeout (seconds) — x86_64 runs under QEMU emulation and can be slow.
+    build_timeout: 3600
+
+    # Every platform writes to its own log + status file so a single task
+    # can tail all three logs live and detect completion.
+    log_dir: "{{ workspace_dir }}/build_logs"
+    status_dir: "/tmp/cross_platform_pipeline"
+
+    macos_log_file: "{{ log_dir }}/macos_arm64.log"
+    macos_status_file: "{{ status_dir }}/macos_arm64.status"
+
+    linux_platforms:
+      - arch: x86_64
+        docker_platform: linux/amd64
+        container: cross_build_x86_64
+        cache_vol: cross_build_x86_64_bazel_cache
+        bazel_config: x86_64
+      - arch: arm64
+        docker_platform: linux/arm64
+        container: cross_build_arm64
+        cache_vol: cross_build_arm64_bazel_cache
+        bazel_config: arm64
+
+  tasks:
+    - name: Show pipeline environment
+      ansible.builtin.debug:
+        msg: >-
+          pipeline_env={{ pipeline_env }}
+          ({{ 'reusing existing containers/image if present' if pipeline_env != 'build'
+              else 'pulling fresh image + recreating containers' }})
+
+    - name: Ensure BuildBuddy on-prem cache is running (macOS host)
+      ansible.builtin.command:
+        cmd: "ansible-playbook {{ playbook_dir }}/setup_buildbuddy.yml"
+      when: ansible_facts['system'] == 'Darwin'
+
+    - name: Ensure buildbuddy-net docker network exists
+      community.docker.docker_network:
+        name: "{{ network_name }}"
+        state: present
+
+    - name: Ensure bazel cache volumes exist
+      community.docker.docker_volume:
+        name: "{{ item.cache_vol }}"
+        state: present
+      loop: "{{ linux_platforms }}"
+      loop_control:
+        label: "{{ item.arch }}"
+
+    - name: Check whether build containers already exist
+      community.docker.docker_container_info:
+        name: "{{ item.container }}"
+      loop: "{{ linux_platforms }}"
+      loop_control:
+        label: "{{ item.arch }}"
+      register: existing_containers
+
+    # docker_image/docker_container's "pull if missing" logic only checks
+    # whether the *tag* is present locally, not whether the specific
+    # platform variant is. Since x86_64 and arm64 share the same tag
+    # (docker_image), pulling amd64 first satisfies "missing" for the tag
+    # and the later arm64 create fails with "does not provide the
+    # specified platform". Pull explicitly per-platform, but only when the
+    # container doesn't exist yet (or pipeline_env=build forces a refresh).
+    - name: Pull platform-specific image for containers that need to be created
+      ansible.builtin.command:
+        cmd: "docker pull --platform {{ item.item.docker_platform }} {{ docker_image }}"
+      loop: "{{ existing_containers.results }}"
+      loop_control:
+        label: "{{ item.item.arch }}"
+      when: not item.exists or pipeline_env == 'build'
+      changed_when: true
+
+    - name: Ensure build containers exist and are running
+      community.docker.docker_container:
+        name: "{{ item.item.container }}"
+        image: "{{ docker_image }}"
+        platform: "{{ item.item.docker_platform }}"
+        state: started
+        # The image was already pulled (per-platform) in the task above
+        # whenever needed, so the container module itself never needs to pull.
+        pull: never
+        recreate: "{{ pipeline_env == 'build' }}"
+        # In dev mode, ignore config drift against an already-running
+        # container (e.g. one started by hand) — recreate is opt-in via
+        # pipeline_env=build only. Without this, docker_container recreates
+        # the container any time its actual config differs from the params
+        # below, even with recreate=false.
+        comparisons: "{{ {'*': 'ignore'} if pipeline_env != 'build' else omit }}"
+        command: sleep infinity
+        working_dir: /workspace
+        networks:
+          - name: "{{ network_name }}"
+        volumes:
+          - "{{ workspace_dir }}:/workspace"
+          - "{{ lookup('env', 'HOME') }}/.ssh:/root/.ssh:ro"
+          - "{{ item.item.cache_vol }}:/root/.cache/bazel"
+        env:
+          GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no"
+      loop: "{{ existing_containers.results }}"
+      loop_control:
+        label: "{{ item.item.arch }}"
+
+    - name: Ensure log + status directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ log_dir }}"
+        - "{{ status_dir }}"
+
+    - name: Reset log + status files for this run
+      ansible.builtin.shell: |
+        : > "{{ log_dir }}/{{ item.arch }}.log"
+        rm -f "{{ status_dir }}/{{ item.arch }}.status"
+      loop: "{{ linux_platforms }}"
+      loop_control:
+        label: "{{ item.arch }}"
+      changed_when: false
+
+    - name: Show Linux build log locations
+      ansible.builtin.debug:
+        msg: "{{ item.arch }}: {{ log_dir }}/{{ item.arch }}.log"
+      loop: "{{ linux_platforms }}"
+      loop_control:
+        label: "{{ item.arch }}"
+
+    - name: Show macOS build log location
+      ansible.builtin.debug:
+        msg: "macos_arm64: {{ macos_log_file }}"
+      when: ansible_facts['system'] == 'Darwin'
+
+    - name: Launch test + build inside each Linux container (parallel)
+      ansible.builtin.shell: |
+        (
+          docker exec {{ item.container }} bash -c "
+            set -e
+            cd /workspace
+            chmod +x ./bazel 2>/dev/null || true
+            apt-get update -qq && apt-get install -y -qq curl{{ ' libxml2-dev' if item.arch == 'arm64' else '' }}
+            killall java 2>/dev/null || pkill java 2>/dev/null || true
+            sleep 1
+            mkdir -p /root/.cache/bazel/disk_cache
+            ./bazel test --config={{ item.bazel_config }} --disk_cache=/root/.cache/bazel/disk_cache //examples/...
+            ./bazel build --config={{ item.bazel_config }} --disk_cache=/root/.cache/bazel/disk_cache //examples/...
+          " > "{{ log_dir }}/{{ item.arch }}.log" 2>&1
+          echo $? > "{{ status_dir }}/{{ item.arch }}.status"
+        ) < /dev/null > /dev/null 2>&1 &
+        disown
+      args:
+        executable: /bin/bash
+      loop: "{{ linux_platforms }}"
+      loop_control:
+        label: "{{ item.arch }}"
+
+    - name: Reset macOS build log + status file
+      ansible.builtin.shell: |
+        : > "{{ macos_log_file }}"
+        rm -f "{{ macos_status_file }}"
+      when: ansible_facts['system'] == 'Darwin'
+      changed_when: false
+
+    - name: Launch native macOS test + build (host only, parallel with containers)
+      ansible.builtin.shell: |
+        (
+          cd "{{ workspace_dir }}"
+          chmod +x ./bazel 2>/dev/null || true
+          killall java 2>/dev/null || true
+          sleep 1
+          {
+            ./bazel test --config=macos_arm64 //examples/...
+            test_rc=$?
+            ./bazel build --config=macos_arm64 //examples/...
+            build_rc=$?
+          } > "{{ macos_log_file }}" 2>&1
+          rc=$(( test_rc != 0 ? test_rc : build_rc ))
+          echo "$rc" > "{{ macos_status_file }}"
+        ) < /dev/null > /dev/null 2>&1 &
+        disown
+      args:
+        executable: /bin/bash
+      when: ansible_facts['system'] == 'Darwin'
+
+    - name: Watch build logs until all platforms finish
+      ansible.builtin.shell: |
+        set -uo pipefail
+        logs=({% for item in linux_platforms %}"{{ log_dir }}/{{ item.arch }}.log" {% endfor %}{% if ansible_facts['system'] == 'Darwin' %}"{{ macos_log_file }}"{% endif %})
+        status_files=({% for item in linux_platforms %}"{{ status_dir }}/{{ item.arch }}.status" {% endfor %}{% if ansible_facts['system'] == 'Darwin' %}"{{ macos_status_file }}"{% endif %})
+
+        tail -q -n +1 -f "${logs[@]}" > /dev/tty 2>&1 &
+        tail_pid=$!
+        trap 'kill "$tail_pid" 2>/dev/null || true' EXIT
+
+        elapsed=0
+        while true; do
+          all_done=true
+          for f in "${status_files[@]}"; do
+            [[ -s "$f" ]] || all_done=false
+          done
+          $all_done && break
+          if (( elapsed >= {{ build_timeout }} )); then
+            echo "Timed out after {{ build_timeout }}s waiting for builds to finish." >&2
+            exit 1
+          fi
+          sleep 2
+          elapsed=$(( elapsed + 2 ))
+        done
+      args:
+        executable: /bin/bash
+
+    - name: Read Linux build results
+      ansible.builtin.slurp:
+        src: "{{ status_dir }}/{{ item.arch }}.status"
+      register: linux_status_raw
+      loop: "{{ linux_platforms }}"
+      loop_control:
+        label: "{{ item.arch }}"
+
+    - name: Set Linux result facts
+      ansible.builtin.set_fact:
+        linux_results: "{{ (linux_results | default([])) + [{'arch': item.item.arch, 'rc': (item.content | b64decode | trim) | int}] }}"
+      loop: "{{ linux_status_raw.results }}"
+      loop_control:
+        label: "{{ item.item.arch }}"
+
+    - name: Read macOS build result
+      ansible.builtin.slurp:
+        src: "{{ macos_status_file }}"
+      register: macos_status_raw
+      when: ansible_facts['system'] == 'Darwin'
+
+    - name: Set macOS result rc fact
+      ansible.builtin.set_fact:
+        macos_rc: "{{ (macos_status_raw.content | b64decode | trim) | int }}"
+      when: ansible_facts['system'] == 'Darwin'
+
+    - name: Report per-platform results
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.arch }}: {{ 'SUCCESS' if item.rc == 0 else 'FAILED (rc=' ~ item.rc ~ ')' }}
+      loop: "{{ linux_results }}"
+      loop_control:
+        label: "{{ item.arch }}"
+
+    - name: Report macOS result
+      ansible.builtin.debug:
+        msg: >-
+          macos_arm64: {{ 'SUCCESS' if macos_rc == 0 else 'FAILED (rc=' ~ macos_rc ~ ')' }}
+      when: ansible_facts['system'] == 'Darwin' and macos_rc is defined
+
+    - name: Fail pipeline if any platform build failed
+      ansible.builtin.assert:
+        that:
+          - (linux_results | map(attribute='rc') | max) == 0
+          - not (ansible_facts['system'] == 'Darwin' and macos_rc is defined) or macos_rc == 0
+        fail_msg: "One or more platform builds failed — see per-platform results above."
+        success_msg: "All platform builds succeeded."

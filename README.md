@@ -116,35 +116,28 @@ bazel build //examples/cc/main:hello-world_arm64
 
 ## Parallel Cross-Platform Testing
 
-`test_cross_platform.sh` runs builds and tests for **x86_64**, **arm64** (Linux, in Docker), and **macos_arm64** simultaneously in a 2×2 tmux grid.
+`ansible/pipeline.yml` runs builds and tests for **x86_64**, **arm64** (Linux, in Docker), and **macos_arm64** (native, macOS host only) in parallel, and prints a pass/fail summary when all three finish.
 
 ```bash
-./test_cross_platform.sh
+cd ansible
+ansible-playbook pipeline.yml
+
+# Force a fresh docker_image pull + container recreation for x86_64/arm64
+ansible-playbook pipeline.yml -e pipeline_env=build
 ```
 
-**Requirements:** `tmux` and Docker Desktop with multi-arch / `binfmt_misc` support.
-
-**Terminal layout:**
-
-```
-┌──────────────┬──────────────┐
-│   x86_64     │   arm64      │  ← Docker containers (Linux)
-├──────────────┼──────────────┤
-│  macos_arm64 │   monitor    │  ← macOS host / status + summary
-└──────────────┴──────────────┘
-```
-
-![Parallel cross-platform build in tmux](docs/tmux_layout.png)
+**Requirements:** `community.docker` collection — `ansible-galaxy install -r requirements.yml` — and Docker Desktop with multi-arch / `binfmt_misc` support.
 
 **How it works:**
 
-- Linux builds run inside long-lived Docker containers (`cross_build_x86_64`, `cross_build_arm64`). Containers are created on first run, restarted on subsequent runs — never removed — so they are reused across invocations.
+- Linux builds run inside long-lived Docker containers (`cross_build_x86_64`, `cross_build_arm64`), created on first run and reused (never removed) on subsequent runs.
 - Bazel output caches are persisted in named Docker volumes (`cross_build_x86_64_bazel_cache`, `cross_build_arm64_bazel_cache`) that survive container restarts and Bazel version changes.
 - Each container is joined to the `buildbuddy-net` Docker network so it can reach the BuildBuddy remote cache at `grpc://buildbuddy-app:1985`.
 - The macOS arm64 build runs natively on the host — no Docker.
-- x86_64 runs under QEMU emulation on Apple Silicon. Bazel JVM startup can take several minutes; a heartbeat line is printed every 30 s so the pane stays visibly alive.
-- Each arch runs `./setup.sh` first to install required host packages, then executes `./bazel test` followed by `./bazel build` for `//examples/...`.
-- Per-arch logs are written to `./build_logs/<arch>_<timestamp>.log`. A summary log is written when all three arches finish.
+- x86_64 runs under QEMU emulation on Apple Silicon, so Bazel JVM startup can take several minutes there.
+- On macOS, the play first ensures the BuildBuddy on-prem cache is running (`ansible-playbook setup_buildbuddy.yml`). Inside each Linux container, required packages (`curl`, plus `libxml2-dev` for the arm64 container) are installed before the build.
+- The three builds run as parallel background jobs; a single task tails all three logs live until every platform finishes, then the play reports each platform's result and fails if any build failed.
+- `pipeline_env` controls container reuse: `dev` (default) reuses the existing x86_64/arm64 containers and image as-is, pulling/recreating only if they don't exist yet; `build` always pulls a fresh `docker_image` and recreates both containers from it.
 
 **Container and volume names** (fixed, no timestamp — same names are reused every run):
 
@@ -153,27 +146,34 @@ bazel build //examples/cc/main:hello-world_arm64
 | x86_64 | `cross_build_x86_64` | `cross_build_x86_64_bazel_cache` |
 | arm64 | `cross_build_arm64` | `cross_build_arm64_bazel_cache` |
 
-### setup.sh
+### Host Setup (`ansible/setup.yml`)
 
-`setup.sh` installs required host packages before building. It is called automatically by `test_cross_platform.sh` and is safe to run multiple times (no-op if all packages are already present). Currently installs `libxml2-dev` (Linux arm64), `curl` (all Linux), and `tmux` (macOS). On macOS it also automatically calls `./setup_buildbuddy.sh` to start the BuildBuddy on-prem remote cache.
-
-To add a new requirement, append an entry to `REQUIRED_PACKAGES` inside `setup.sh`:
+`ansible/setup.yml` installs required host packages before building and is safe to run multiple times (no-op if all packages are already present). Currently installs `libxml2-dev` (Linux arm64), `curl` (all Linux), and `tmux` (macOS). On macOS it also automatically runs the BuildBuddy setup playbook.
 
 ```bash
-"package_name:OS:arch"   # OS: Linux | Darwin | *   arch: arm64 | aarch64 | x86_64 | *
+cd ansible
+ansible-playbook setup.yml
+```
+
+To add a new requirement, append an entry to `required_packages` inside `setup.yml`:
+
+```yaml
+- { name: "package_name", os: "Linux", arch: "arm64" }   # os: Linux | Darwin | "*"   arch: arm64 | aarch64 | x86_64 | "*"
 ```
 
 ## BuildBuddy On-Prem (Remote Cache)
 
-`setup_buildbuddy.sh` starts a local [BuildBuddy](https://www.buildbuddy.io/) on-prem instance in Docker and wires it up as a remote cache and build-event stream for all Bazel invocations.
+`ansible/setup_buildbuddy.yml` starts a local [BuildBuddy](https://www.buildbuddy.io/) on-prem instance in Docker and wires it up as a remote cache and build-event stream for all Bazel invocations.
 
 ```bash
-./setup_buildbuddy.sh          # start / ensure running
-./setup_buildbuddy.sh stop     # stop all BuildBuddy containers
-./setup_buildbuddy.sh status   # show container status
+cd ansible
+ansible-playbook setup_buildbuddy.yml                       # start (default)
+ansible-playbook setup_buildbuddy.yml -e bb_command=stop
+ansible-playbook setup_buildbuddy.yml -e bb_command=status
+ansible-playbook setup_buildbuddy.yml -e bb_command=rm
 ```
 
-On **macOS**, `setup.sh` calls this script automatically so the cache is always available before builds start.
+On **macOS**, `pipeline.yml` and `setup.yml` both run this playbook automatically so the cache is always available before builds start.
 
 ### What it starts
 
@@ -182,7 +182,7 @@ On **macOS**, `setup.sh` calls this script automatically so the cache is always 
 | `buildbuddy-app` | `gcr.io/flame-public/buildbuddy-app-onprem:latest` | HTTP `8080`, gRPC `1985` |
 | `buildbuddy-executor` | `gcr.io/flame-public/buildbuddy-executor-onprem:latest` | (Linux only) |
 
-Both containers are placed on the `buildbuddy-net` Docker network. Cross-platform build containers created by `test_cross_platform.sh` are also joined to this network, so they can reach the cache at `grpc://buildbuddy-app:1985`.
+Both containers are placed on the `buildbuddy-net` Docker network. Cross-platform build containers created by `pipeline.yml` are also joined to this network, so they can reach the cache at `grpc://buildbuddy-app:1985`.
 
 **Web UI:** `http://localhost:8080`
 
@@ -499,10 +499,10 @@ The `WORKSPACE` file is a stub — all repository and toolchain management has b
 | File | Purpose |
 |------|---------|
 | `transitions.bzl` | `linux_arm64_binary` rule: applies a per-target config transition to build Linux arm64 without `--config=arm64` |
-| `test_cross_platform.sh` | Parallel build+test runner: x86_64 + arm64 (Docker) + macos_arm64 (host) in a 2×2 tmux grid |
+| `ansible/pipeline.yml` | Parallel build+test runner: x86_64 + arm64 (Docker) + macos_arm64 (host), unattended |
 | `coverage_check.sh` | Patch coverage checker: runs `bazel coverage`, filters to last-commit diff lines, enforces threshold |
-| `setup.sh` | Installs required host packages before building (idempotent; called by `test_cross_platform.sh`); auto-starts BuildBuddy on macOS |
-| `setup_buildbuddy.sh` | Starts/stops BuildBuddy on-prem in Docker (app + executor on Linux, app only on macOS); wires `buildbuddy-net` |
+| `ansible/setup.yml` | Installs required host packages before building (idempotent); auto-starts BuildBuddy on macOS |
+| `ansible/setup_buildbuddy.yml` | Starts/stops BuildBuddy on-prem in Docker (app + executor on Linux, app only on macOS); wires `buildbuddy-net` |
 | `toolchain_extension.bzl` | Bzlmod module extension; instantiates all external repos; loaded by `MODULE.bazel` |
 | `toolchain_repositories.bzl` | All repository rules: `toolchain_archive_repository`, `macos_sdk_repository`, GCC/LLVM/JDK/protoc/plugin wrappers, `grpc_java_maven_repositories` |
 | `external_tool/external_tool_repositories.bzl` | Legacy WORKSPACE helper (retained but not the primary path); calls a subset of repos |
