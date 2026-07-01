@@ -1,0 +1,45 @@
+---
+# Host build requirements setup.
+#
+# Ensures required host packages are installed before building, then (on
+# macOS only) runs the BuildBuddy setup playbook.
+#
+# Requires: community.docker + community.general collections
+#   →  ansible-galaxy install -r requirements.yml
+#
+# Usage:
+#   ansible-playbook setup.yml
+
+- name: Host build requirements setup
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    # ── Package requirements ────────────────────────────────────────────────
+    # name — package name
+    # os   — Linux | Darwin | "*"
+    # arch — arm64 | aarch64 | x86_64 | "*"
+    required_packages:
+      - { name: "libxml2-dev", os: "Linux", arch: "arm64" }
+      - { name: "curl", os: "Linux", arch: "*" }
+      - { name: "tmux", os: "Darwin", arch: "*" }
+
+  tasks:
+    - name: Install required host packages
+      ansible.builtin.package:
+        name: "{{ item.name }}"
+        state: present
+      become: "{{ ansible_facts['system'] == 'Linux' }}"
+      loop: "{{ required_packages }}"
+      when: >-
+        (item.os == '*' or item.os == ansible_facts['system']) and
+        (item.arch == '*' or
+         (item.arch in ['arm64', 'aarch64'] and ansible_facts['architecture'] in ['arm64', 'aarch64']) or
+         item.arch == ansible_facts['architecture'])
+
+    # ── macOS-only setup ─────────────────────────────────────────────────────
+    - name: Run BuildBuddy setup playbook (macOS only)
+      ansible.builtin.command:
+        cmd: "ansible-playbook {{ playbook_dir }}/setup_buildbuddy.yml"
+      when: ansible_facts['system'] == 'Darwin'

@@ -61,8 +61,8 @@ build:stats --linkopt=-pg
 
 
 # ── BuildBuddy on-prem (local Docker) ────────────────────────────────────────
-# Start with: ./setup_buildbuddy.sh 
-# Stop  with: ./setup_buildbuddy.sh stop
+# Start with: ansible-playbook ansible/setup_buildbuddy.yml
+# Stop  with: ansible-playbook ansible/setup_buildbuddy.yml -e bb_command=stop
 # Web UI: https://localhost:8080
 
 build --bes_results_url=http://buildbuddy-app:8080/invocation/

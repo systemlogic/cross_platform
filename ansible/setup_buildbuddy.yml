@@ -1,0 +1,269 @@
+---
+# BuildBuddy on-prem (local Docker) setup.
+#
+# Requires: community.docker collection  →  ansible-galaxy install -r requirements.yml
+#
+# Usage:
+#   ansible-playbook setup_buildbuddy.yml                       # start (default)
+#   ansible-playbook setup_buildbuddy.yml -e bb_command=stop
+#   ansible-playbook setup_buildbuddy.yml -e bb_command=status
+#   ansible-playbook setup_buildbuddy.yml -e bb_command=rm
+#
+# Or via tags:
+#   ansible-playbook setup_buildbuddy.yml --tags start
+#   ansible-playbook setup_buildbuddy.yml --tags stop
+
+- name: BuildBuddy on-prem setup
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    # ── Images ───────────────────────────────────────────────────────────────
+    app_image: "gcr.io/flame-public/buildbuddy-app-onprem:latest"
+    executor_image: "gcr.io/flame-public/buildbuddy-executor-onprem:latest"
+    prometheus_local_image: "buildbuddy-prometheus:local"
+    grafana_local_image: "buildbuddy-grafana:local"
+
+    # ── Container / network names ─────────────────────────────────────────────
+    app_name: "buildbuddy-app"
+    executor_name: "buildbuddy-executor"
+    prometheus_container: "buildbuddy-prometheus"
+    grafana_container: "buildbuddy-grafana"
+    network_name: "buildbuddy-net"
+
+    # ── Ports ─────────────────────────────────────────────────────────────────
+    grpc_port: 1985
+    http_port: 8080
+    monitoring_port: 9090
+    prometheus_host_port: 9091
+    grafana_port: 3000
+
+    # ── Paths ─────────────────────────────────────────────────────────────────
+    metrics_dir: "{{ playbook_dir | dirname }}/metrics"
+
+    # ── Command (start | stop | status | rm) ─────────────────────────────────
+    bb_command: "start"
+
+  tasks:
+    # ══════════════════════════════════════════════════════════════════════════
+    # STATUS
+    # ══════════════════════════════════════════════════════════════════════════
+    - name: Gather BuildBuddy container info
+      community.docker.docker_host_info:
+        containers: true
+        containers_filters:
+          name: "buildbuddy"
+      register: docker_host_info
+      when: bb_command == "status"
+      tags: [status]
+
+    - name: Print container status
+      ansible.builtin.debug:
+        msg: >-
+          {{ docker_host_info.containers
+             | map(attribute='Names') | list
+             | zip(docker_host_info.containers | map(attribute='Status') | list)
+             | list }}
+      when: bb_command == "status"
+      tags: [status]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # STOP
+    # ══════════════════════════════════════════════════════════════════════════
+    - name: Stop all BuildBuddy containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - "{{ app_name }}"
+        - "{{ executor_name }}"
+        - "{{ prometheus_container }}"
+        - "{{ grafana_container }}"
+      ignore_errors: true
+      when: bb_command in ['stop', 'rm']
+      tags: [stop, rm]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # RM  (stop + remove containers + remove local images)
+    # ══════════════════════════════════════════════════════════════════════════
+    - name: Remove all BuildBuddy containers
+      community.docker.docker_container:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ app_name }}"
+        - "{{ executor_name }}"
+        - "{{ prometheus_container }}"
+        - "{{ grafana_container }}"
+      ignore_errors: true
+      when: bb_command == "rm"
+      tags: [rm]
+
+    - name: Remove local metrics images
+      community.docker.docker_image:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ prometheus_local_image }}"
+        - "{{ grafana_local_image }}"
+      ignore_errors: true
+      when: bb_command == "rm"
+      tags: [rm]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # START — network
+    # ══════════════════════════════════════════════════════════════════════════
+    - name: Ensure Docker network exists
+      community.docker.docker_network:
+        name: "{{ network_name }}"
+        state: present
+      when: bb_command == "start"
+      tags: [start]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # START — BuildBuddy app
+    # ══════════════════════════════════════════════════════════════════════════
+    - name: Pull BuildBuddy app image
+      community.docker.docker_image:
+        name: "{{ app_image }}"
+        source: pull
+      when: bb_command == "start"
+      tags: [start]
+
+    - name: Start BuildBuddy app container
+      community.docker.docker_container:
+        name: "{{ app_name }}"
+        image: "{{ app_image }}"
+        state: started
+        restart_policy: unless-stopped
+        networks:
+          - name: "{{ network_name }}"
+        ports:
+          - "{{ grpc_port }}:{{ grpc_port }}"
+          - "{{ http_port }}:{{ http_port }}"
+          - "{{ monitoring_port }}:{{ monitoring_port }}"
+      when: bb_command == "start"
+      tags: [start]
+
+    - name: Wait for BuildBuddy HTTP UI (port {{ http_port }})
+      ansible.builtin.wait_for:
+        host: localhost
+        port: "{{ http_port }}"
+        timeout: 40
+      when: bb_command == "start"
+      tags: [start]
+
+    - name: Wait for BuildBuddy gRPC (port {{ grpc_port }})
+      ansible.builtin.wait_for:
+        host: localhost
+        port: "{{ grpc_port }}"
+        timeout: 40
+      when: bb_command == "start"
+      tags: [start]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # START — executor (Linux only)
+    # ══════════════════════════════════════════════════════════════════════════
+    - name: Pull BuildBuddy executor image
+      community.docker.docker_image:
+        name: "{{ executor_image }}"
+        source: pull
+      when: bb_command == "start" and ansible_system == "Linux"
+      tags: [start]
+
+    - name: Start BuildBuddy executor container
+      community.docker.docker_container:
+        name: "{{ executor_name }}"
+        image: "{{ executor_image }}"
+        state: started
+        restart_policy: unless-stopped
+        privileged: true
+        networks:
+          - name: "{{ network_name }}"
+        env:
+          SYS_MOUNT_INFO: "1"
+        command: "--executor.app_target=grpc://{{ app_name }}:{{ grpc_port }}"
+      when: bb_command == "start" and ansible_system == "Linux"
+      tags: [start]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # START — metrics (Prometheus + Grafana built from local Dockerfiles)
+    # ══════════════════════════════════════════════════════════════════════════
+    - name: Build Prometheus image from local Dockerfile
+      community.docker.docker_image:
+        name: "{{ prometheus_local_image }}"
+        source: build
+        force_source: true
+        build:
+          path: "{{ metrics_dir }}"
+          dockerfile: "{{ metrics_dir }}/Dockerfile"
+      when: bb_command == "start"
+      tags: [start]
+
+    - name: Build Grafana image from local Dockerfile
+      community.docker.docker_image:
+        name: "{{ grafana_local_image }}"
+        source: build
+        force_source: true
+        build:
+          path: "{{ metrics_dir }}"
+          dockerfile: "{{ metrics_dir }}/Dockerfile.grafana"
+      when: bb_command == "start"
+      tags: [start]
+
+    - name: Start Prometheus container
+      community.docker.docker_container:
+        name: "{{ prometheus_container }}"
+        image: "{{ prometheus_local_image }}"
+        state: started
+        restart_policy: unless-stopped
+        networks:
+          - name: "{{ network_name }}"
+        ports:
+          - "{{ prometheus_host_port }}:9090"
+      when: bb_command == "start"
+      tags: [start]
+
+    - name: Start Grafana container
+      community.docker.docker_container:
+        name: "{{ grafana_container }}"
+        image: "{{ grafana_local_image }}"
+        state: started
+        restart_policy: unless-stopped
+        networks:
+          - name: "{{ network_name }}"
+        ports:
+          - "{{ grafana_port }}:3000"
+      when: bb_command == "start"
+      tags: [start]
+
+    - name: Wait for Grafana (port {{ grafana_port }})
+      ansible.builtin.wait_for:
+        host: localhost
+        port: "{{ grafana_port }}"
+        timeout: 40
+      when: bb_command == "start"
+      tags: [start]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # Summary
+    # ══════════════════════════════════════════════════════════════════════════
+    - name: Print access info
+      ansible.builtin.debug:
+        msg:
+          - "BuildBuddy is running."
+          - "  Web UI      : http://localhost:{{ http_port }}"
+          - "  gRPC        : grpc://localhost:{{ grpc_port }}"
+          - "  Raw metrics : http://localhost:{{ monitoring_port }}/metrics"
+          - "  Prometheus  : http://localhost:{{ prometheus_host_port }}"
+          - "  Grafana     : http://localhost:{{ grafana_port }}  (admin / admin)"
+          - ""
+          - >-
+            {% if ansible_system == 'Linux' %}
+            Bazel (Linux - cache + RBE): bazel build --config=bb_linux <target>
+            {% else %}
+            Bazel (macOS - cache only): bazel build --config=bb_macos <target>
+            {% endif %}
+      when: bb_command == "start"
+      tags: [start]
