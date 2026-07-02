@@ -17,7 +17,7 @@
 # Coverage tool: Bazel's built-in `bazel coverage` (lcov output)
 #
 # Usage:
-#   ./coverage_check.sh [OPTIONS]
+#   ./ansible/coverage_check.sh [OPTIONS]
 #
 # Options:
 #   --config <cfg>      Bazel platform config  (default: auto-detected)
@@ -27,20 +27,21 @@
 #   -h | --help         Show this help
 #
 # Examples:
-#   ./coverage_check.sh --config macos_arm64
-#   ./coverage_check.sh --threshold 80
+#   ./ansible/coverage_check.sh --config macos_arm64
+#   ./ansible/coverage_check.sh --threshold 80
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BAZEL="${SCRIPT_DIR}/bazel"
+WORKSPACE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+BAZEL="${WORKSPACE_DIR}/bazel"
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 BAZEL_CONFIG=""
 THRESHOLD=75
 KEEP_REPORT=0
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-REPORT_DIR="${SCRIPT_DIR}/coverage_reports/${TIMESTAMP}"
+REPORT_DIR="${WORKSPACE_DIR}/coverage_reports/${TIMESTAMP}"
 LCOV_MERGED="${REPORT_DIR}/merged_coverage.dat"
 
 # ── Colours ───────────────────────────────────────────────────────────────────
@@ -53,7 +54,11 @@ warn() { echo -e "${YELLOW}[warning]${RESET}  $*"; }
 die()  { echo -e "${RED}[error]${RESET}    $*" >&2; exit 1; }
 
 usage() {
-    sed -n '/^# Usage:/,/^[^#]/{ /^#/{ s/^# \{0,2\}//; p }; /^[^#]/q }' "$0"
+    awk '
+        /^# Usage:/ { f = 1 }
+        f && !/^#/  { exit }
+        f           { sub(/^# ?/, ""); print }
+    ' "$0"
     exit 0
 }
 
@@ -88,9 +93,9 @@ if [[ -z "${BAZEL_CONFIG}" ]]; then
 fi
 
 # ── Resolve commit range ──────────────────────────────────────────────────────
-CURRENT_BRANCH="$(git -C "${SCRIPT_DIR}" rev-parse --abbrev-ref HEAD)"
-HEAD_SHA="$(git -C "${SCRIPT_DIR}" rev-parse --short HEAD)"
-PREV_SHA="$(git -C "${SCRIPT_DIR}" rev-parse --short HEAD~1 2>/dev/null)" \
+CURRENT_BRANCH="$(git -C "${WORKSPACE_DIR}" rev-parse --abbrev-ref HEAD)"
+HEAD_SHA="$(git -C "${WORKSPACE_DIR}" rev-parse --short HEAD)"
+PREV_SHA="$(git -C "${WORKSPACE_DIR}" rev-parse --short HEAD~1 2>/dev/null)" \
     || die "Could not resolve HEAD~1. Repository must have at least 2 commits."
 
 log "Branch : ${CURRENT_BRANCH}"
@@ -98,12 +103,12 @@ log "Diff   : ${PREV_SHA}..${HEAD_SHA}  (HEAD~1..HEAD — last commit)"
 
 # ── Collect changed source files ──────────────────────────────────────────────
 # Use --name-only for target discovery; also keep the full patch for line tracking.
-PATCH_CONTENT="$(git -C "${SCRIPT_DIR}" diff HEAD~1..HEAD)"
+PATCH_CONTENT="$(git -C "${WORKSPACE_DIR}" diff HEAD~1..HEAD)"
 [[ -n "${PATCH_CONTENT}" ]] || die "Diff is empty — last commit introduced no changes."
 
 # Gather only source-file paths that Bazel can trace as srcs nodes.
 mapfile -t CHANGED_SOURCE_FILES < <(
-    git -C "${SCRIPT_DIR}" diff HEAD~1..HEAD --name-only \
+    git -C "${WORKSPACE_DIR}" diff HEAD~1..HEAD --name-only \
         -- "*.go" "*.py" "*.java" "*.cpp" "*.c" "*.h" 2>/dev/null || true
 )
 
@@ -222,11 +227,11 @@ echo ""
 echo ""
 
 # Locate the merged lcov report Bazel produced
-BAZEL_COVERAGE_DAT="${SCRIPT_DIR}/bazel-out/_coverage/_coverage_report.dat"
+BAZEL_COVERAGE_DAT="${WORKSPACE_DIR}/bazel-out/_coverage/_coverage_report.dat"
 if [[ ! -f "${BAZEL_COVERAGE_DAT}" ]]; then
     log "Merged report not found at expected path; aggregating per-test reports..."
     > "${LCOV_MERGED}"
-    find "${SCRIPT_DIR}/bazel-testlogs" -name "coverage.dat" 2>/dev/null | while read -r dat; do
+    find "${WORKSPACE_DIR}/bazel-testlogs" -name "coverage.dat" 2>/dev/null | while read -r dat; do
         cat "${dat}" >> "${LCOV_MERGED}"
     done
     [[ -s "${LCOV_MERGED}" ]] || die "No coverage data found under bazel-testlogs/."

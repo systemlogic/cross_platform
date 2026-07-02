@@ -8,7 +8,6 @@ public class Server {
         if (args.length > 0) {
             port = Integer.parseInt(args[0]);
         }
-
         io.grpc.Server server = NettyServerBuilder.forPort(port)
             .addService(new GreeterServiceImpl())
             .build()
