@@ -2,7 +2,11 @@
 # Cross-platform bazel test + build pipeline.
 #
 # Runs the x86_64, arm64 (Linux in Docker) and macOS ARM64 bazel test+build
-# in parallel and prints a single pass/fail summary at the end.
+# in parallel and prints a single pass/fail summary at the end. Once all
+# platform builds pass, runs coverage_check.yml to gate the last commit's
+# patch coverage. As the last step, runs affected_server_targets.sh to
+# report which server-tagged //examples/... targets (e.g.
+# //examples/go/grpc_server:server) were affected by the last commit.
 #
 # Container behaviour:
 #   • Containers are long-lived (sleep infinity) and reused across runs.
@@ -294,3 +298,20 @@
           - not (ansible_facts['system'] == 'Darwin' and macos_rc is defined) or macos_rc == 0
         fail_msg: "One or more platform builds failed — see per-platform results above."
         success_msg: "All platform builds succeeded."
+
+    - name: Run patch coverage check
+      ansible.builtin.command:
+        cmd: "ansible-playbook {{ playbook_dir }}/coverage_check.yml"
+      changed_when: false
+
+    - name: Determine affected server targets for this commit (last step)
+      ansible.builtin.command:
+        cmd: "{{ playbook_dir }}/affected_server_targets.sh"
+        chdir: "{{ workspace_dir }}"
+      register: affected_targets_result
+      changed_when: false
+      failed_when: false
+
+    - name: Show affected server targets being deployed
+      ansible.builtin.debug:
+        msg: "{{ affected_targets_result.stdout_lines }}"

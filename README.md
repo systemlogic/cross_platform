@@ -208,18 +208,20 @@ Remote execution (`--remote_executor`) is available on Linux (app + executor bot
 
 ## Code Coverage
 
-`coverage_check.sh` measures **patch coverage** — the fraction of lines introduced by the last commit (`HEAD~1..HEAD`) that are exercised by tests — and enforces a configurable minimum threshold.
+`ansible/coverage_check.sh` measures **patch coverage** — the fraction of lines introduced by the last commit (`HEAD~1..HEAD`) that are exercised by tests — and enforces a configurable minimum threshold.
 
 ```bash
 # Auto-detect platform, 75% threshold (default)
-./coverage_check.sh
+./ansible/coverage_check.sh
 
 # Explicit platform and threshold
-./coverage_check.sh --config macos_arm64 --threshold 80
+./ansible/coverage_check.sh --config macos_arm64 --threshold 80
 
 # Keep the lcov report after a passing run
-./coverage_check.sh --keep-report
+./ansible/coverage_check.sh --keep-report
 ```
+
+It can also be run via the Ansible wrapper (`ansible-playbook ansible/coverage_check.yml`), which exposes the same options as extra-vars and asserts on the exit code.
 
 **Options:**
 
@@ -265,11 +267,13 @@ The merged lcov report lands at `bazel-out/_coverage/_coverage_report.dat`.
 
 ## Affected Server Targets
 
-`affected_server_targets.sh` identifies Bazel targets tagged `server` in `//examples/...` that are **transitively affected** by source-file changes in the last commit (`HEAD~1..HEAD`). Use it to determine which deployable service images need to be rebuilt and redeployed after a commit.
+`ansible/affected_server_targets.sh` identifies Bazel targets tagged `server` in `//examples/...` that are **transitively affected** by source-file changes in the last commit (`HEAD~1..HEAD`). Use it to determine which deployable service images need to be rebuilt and redeployed after a commit.
 
 ```bash
-./affected_server_targets.sh
+./ansible/affected_server_targets.sh
 ```
+
+It also runs automatically as the first step of `ansible/pipeline.yml`, so every pipeline run prints which server targets are affected (and therefore being built/deployed) by the commit under test — no separate invocation needed.
 
 **How it works:**
 
@@ -500,7 +504,9 @@ The `WORKSPACE` file is a stub — all repository and toolchain management has b
 |------|---------|
 | `transitions.bzl` | `linux_arm64_binary` rule: applies a per-target config transition to build Linux arm64 without `--config=arm64` |
 | `ansible/pipeline.yml` | Parallel build+test runner: x86_64 + arm64 (Docker) + macos_arm64 (host), unattended |
-| `coverage_check.sh` | Patch coverage checker: runs `bazel coverage`, filters to last-commit diff lines, enforces threshold |
+| `ansible/affected_server_targets.sh` | Lists `server`-tagged targets affected by the last commit; run automatically as the first step of `pipeline.yml` |
+| `ansible/coverage_check.sh` | Patch coverage checker: runs `bazel coverage`, filters to last-commit diff lines, enforces threshold |
+| `ansible/coverage_check.yml` | Ansible wrapper around `coverage_check.sh`; exposes its options as extra-vars and asserts on exit code |
 | `ansible/setup.yml` | Installs required host packages before building (idempotent); auto-starts BuildBuddy on macOS |
 | `ansible/setup_buildbuddy.yml` | Starts/stops BuildBuddy on-prem in Docker (app + executor on Linux, app only on macOS); wires `buildbuddy-net` |
 | `toolchain_extension.bzl` | Bzlmod module extension; instantiates all external repos; loaded by `MODULE.bazel` |
