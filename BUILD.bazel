@@ -160,23 +160,6 @@ toolchain(
     toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
 )
 
-# Linux platform targets
-platform(
-    name = "x86_64_platform",
-    constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-)
-
-platform(
-    name = "arm64_platform",
-    constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:arm64",
-    ],
-)
-
 # =============================================================================
 # macOS Toolchains — exec: macOS ARM64, downloaded LLVM 18.1.8
 #
@@ -528,23 +511,6 @@ config_setting(
     name = "is_linux_x86_64",
     constraint_values = [
         "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-)
-
-# macOS platform targets
-platform(
-    name = "macos_arm64_platform",
-    constraint_values = [
-        "@platforms//os:macos",
-        "@platforms//cpu:arm64",
-    ],
-)
-
-platform(
-    name = "macos_x86_64_platform",
-    constraint_values = [
-        "@platforms//os:macos",
         "@platforms//cpu:x86_64",
     ],
 )
