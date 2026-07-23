@@ -32,7 +32,7 @@ def _linux_arm64_transition_impl(settings, attr):
     _ = settings  # unused — transition is unconditional
     _ = attr
     return {
-        "//command_line_option:platforms": "//:arm64_platform",
+        "//command_line_option:platforms": "//platforms:arm64_platform",
         "//command_line_option:cpu": "arm64",
         # Register both toolchains so Bazel resolves the right one whether
         # the exec machine is x86_64 (gcc_arm64_toolchain) or aarch64

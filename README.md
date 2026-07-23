@@ -91,7 +91,7 @@ macOS toolchains are registered globally in `MODULE.bazel` and auto-selected by 
 
 An alternative to `--config=arm64` for cases where a single `BUILD` rule should always produce an arm64 binary without requiring a command-line flag.
 
-`transitions.bzl` provides a `linux_arm64_binary` rule that applies a Starlark [configuration transition](https://bazel.build/extending/config#user-defined-transitions) mirroring `.bazelrc`'s `build:arm64` config — setting `//command_line_option:platforms` to `//:arm64_platform`, `--cpu` to `arm64`, and registering both Linux arm64 toolchains:
+`transitions.bzl` provides a `linux_arm64_binary` rule that applies a Starlark [configuration transition](https://bazel.build/extending/config#user-defined-transitions) mirroring `.bazelrc`'s `build:arm64` config — setting `//command_line_option:platforms` to `//platforms:arm64_platform`, `--cpu` to `arm64`, and registering both Linux arm64 toolchains:
 
 ```python
 load("//:transitions.bzl", "linux_arm64_binary")
